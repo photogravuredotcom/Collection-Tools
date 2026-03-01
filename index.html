@@ -419,7 +419,7 @@
   <div class="input-panel">
     <label class="panel-label">API Key</label>
     <input type="password" id="apiKey" placeholder="Paste your Anthropic API key here (sk-ant-…)" style="background:var(--parchment);border:1px solid var(--warm-mid);color:var(--ink);font-family:'DM Mono',monospace;font-size:0.82rem;padding:10px 14px;outline:none;width:100%;margin-bottom:6px;" />
-    <p class="hint" style="margin-bottom:20px;">Your key stays in your browser only — never stored or shared.</p>
+    <p class="hint" style="margin-bottom:20px;">Saved automatically in your browser — you only need to paste this once.</p>
 
     <label class="panel-label">Paste Citation or Title</label>
     <textarea id="citation" rows="4" placeholder="Paste anything — a full MLA citation, a spreadsheet row, or just a title and year.
@@ -755,6 +755,21 @@ function esc(str) {
 
 document.getElementById('citation').addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.ctrlKey) generateTerms();
+});
+
+// Save API key to localStorage when user types it
+document.getElementById('apiKey').addEventListener('change', function() {
+  if (this.value.trim()) {
+    localStorage.setItem('pgApiKey', this.value.trim());
+  }
+});
+
+// Load saved API key on page load
+window.addEventListener('load', function() {
+  const saved = localStorage.getItem('pgApiKey');
+  if (saved) {
+    document.getElementById('apiKey').value = saved;
+  }
 });
 </script>
 </body>
