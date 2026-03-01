@@ -257,10 +257,11 @@
     height: 100%;
   }
 
-  .block-primary::before { background: var(--ink); }
-  .block-accent::before  { background: var(--gold); }
-  .block-exclude::before { background: var(--rust); }
-  .block-note::before    { background: var(--warm-mid); }
+  .block-primary::before  { background: var(--ink); }
+  .block-accent::before   { background: var(--gold); }
+  .block-exclude::before  { background: var(--rust); }
+  .block-note::before     { background: var(--warm-mid); }
+  #validationBlock::before { background: var(--rust); }
 
   .block-head {
     display: flex;
@@ -454,6 +455,14 @@ or    Découvertes en Chaldée 1884"></textarea>
       <p id="warningText"></p>
     </div>
 
+    <div class="result-block" id="validationBlock" style="display:none;border-color:var(--aged);">
+      <div class="block-head" style="background:#fdf8f0;">
+        <h3 style="color:var(--rust);">&#9998; Validation Flags</h3>
+        <span style="font-family:'EB Garamond',serif;font-style:italic;font-size:0.82rem;color:var(--gold);">Review before searching</span>
+      </div>
+      <div class="block-body" id="validationBody"></div>
+    </div>
+
     <div class="result-block block-primary">
       <div class="block-head">
         <h3>Universal Search Term</h3>
@@ -534,6 +543,9 @@ Return ONLY a valid JSON object. No markdown fences, no extra text before or aft
   "entryLabel": "Short readable label: Author surname, Short Title, Date. Max 70 chars.",
   "highFalsePositiveRisk": true or false,
   "warningText": "If high risk: brief explanation. Empty string if not.",
+  "validationFlags": [
+    { "field": "title or author or date or publisher", "issue": "description of potential error", "suggestion": "corrected or standard form" }
+  ],
   "universalTerm": "The single best 2-5 word search string that works across all platforms. Use the most distinctive words from the title plus author surname if helpful. Omit generic words like Album, Atlas, Voyage, Histoire, Journal unless unavoidable.",
   "universalNote": "One sentence on why these words were chosen.",
   "ebayTerm": "Same core term formatted for eBay with the key phrase in double quotes.",
@@ -558,7 +570,8 @@ RULES:
 5. platformNotes: only include platforms where advice differs meaningfully from the universal term. Empty array is fine.
 6. exclusionTerms: always include -reprint and -facsimile as a baseline. Add title-specific exclusions.
 7. No apostrophes in any string value anywhere. Rephrase all notes to avoid them.
-8. Do not invent details not present in the input.`;
+8. Do not invent details not present in the input.
+9. validationFlags: Cross-check the input against your bibliographic knowledge of 19th and early 20th century photomechanical books. Flag any of the following if detected: misspelled author names (provide standard form), misspelled or truncated titles (provide correct form), incorrect or implausible dates, misattributed publishers or places of publication, missing accents on proper nouns or titles, truncated titles that may cause missed results, known variant titles or alternative forms that should also be searched. If the input appears entirely correct, return an empty array. Only flag genuine issues - do not flag things you are uncertain about.`;
 
   const apiKey = document.getElementById('apiKey').value.trim();
   if (!apiKey) {
@@ -637,6 +650,28 @@ function renderResults(d) {
     wb.classList.add('visible');
   } else {
     wb.classList.remove('visible');
+  }
+
+  // Validation flags
+  const validationBlock = document.getElementById('validationBlock');
+  const validationBody = document.getElementById('validationBody');
+  validationBody.innerHTML = '';
+  const flags = d.validationFlags || [];
+  if (flags.length) {
+    flags.forEach(f => {
+      const item = document.createElement('div');
+      item.className = 'note-item';
+      item.innerHTML = `
+        <span class="note-platform" style="color:var(--rust);min-width:90px;">${esc(f.field)}</span>
+        <span>
+          <span style="font-family:'EB Garamond',serif;">${esc(f.issue)}</span>
+          ${f.suggestion ? '<br><span style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--gold);">Suggested: ' + esc(f.suggestion) + '</span>' : ''}
+        </span>`;
+      validationBody.appendChild(item);
+    });
+    validationBlock.style.display = 'block';
+  } else {
+    validationBlock.style.display = 'none';
   }
 
   document.getElementById('universalTerm').textContent = d.universalTerm || '';
