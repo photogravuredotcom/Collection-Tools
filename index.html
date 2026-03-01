@@ -665,7 +665,7 @@ function renderResults(d) {
         <span class="note-platform" style="color:var(--rust);min-width:90px;">${esc(f.field)}</span>
         <span>
           <span style="font-family:'EB Garamond',serif;">${esc(f.issue)}</span>
-          ${f.suggestion ? '<br><span style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--gold);">Suggested: ' + esc(f.suggestion) + '</span>' : ''}
+          ${f.suggestion ? '<br><span style="font-family:monospace;font-size:0.75rem;color:var(--gold);">Suggested: ' + esc(f.suggestion) + '</span>' : ''}
         </span>`;
       validationBody.appendChild(item);
     });
