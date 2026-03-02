@@ -465,7 +465,7 @@ or    Découvertes en Chaldée 1884"></textarea>
 
     <div class="result-block block-primary">
       <div class="block-head">
-        <h3>Universal Search Term</h3>
+        <h3>Universal Search Term <span style="font-weight:400;opacity:0.55;font-size:0.9em">(quoted phrase + author)</span></h3>
         <button class="copy-btn" onclick="copyField('universalTerm', this)">Copy</button>
       </div>
       <div class="block-body">
@@ -546,10 +546,10 @@ Return ONLY a valid JSON object. No markdown fences, no extra text before or aft
   "validationFlags": [
     { "field": "title or author or date or publisher", "issue": "description of potential error", "suggestion": "corrected or standard form" }
   ],
-  "universalTerm": "The single best 2-5 word search string that works across all platforms. Use the most distinctive words from the title plus author surname if helpful. Omit generic words like Album, Atlas, Voyage, Histoire, Journal unless unavoidable.",
-  "universalNote": "One sentence on why these words were chosen.",
-  "ebayTerm": "Same core term formatted for eBay with the key phrase in double quotes.",
-  "ebayNote": "One brief eBay-specific tip.",
+  "universalTerm": "The optimized search string for all platforms. Format: the most distinctive 2-4 word title fragment in double quotes, followed by the author surname unquoted if it adds specificity. Example: \"Decouvertes Chaldee\" Sarzec or \"Naturalistic Photography\" Emerson. The quoted phrase must contain only words that appear consecutively in the actual title. Never quote words that are not adjacent in the title. Omit generic words like Album, Atlas, Voyage, Histoire, Journal, Art, Photography unless they are part of a longer distinctive phrase.",
+  "universalNote": "One sentence explaining the quoted phrase choice and why the words are consecutive in the title.",
+  "ebayTerm": "Same as universalTerm - the quoted phrase format already works optimally for eBay.",
+  "ebayNote": "Confirm the quoted words are consecutive in the title and appear in the correct order.",
   "accentVariants": [
     { "original": "accented word", "unaccented": "unaccented version", "note": "which platforms need unaccented" }
   ],
@@ -563,15 +563,16 @@ Return ONLY a valid JSON object. No markdown fences, no extra text before or aft
 }
 
 RULES:
-1. universalTerm must be 2-5 words. The shortest string that uniquely identifies this work.
+1. universalTerm: the quoted phrase must use only words that are genuinely consecutive in the actual title. Never manufacture a phrase by combining non-adjacent words. If no 2+ word consecutive phrase is distinctive enough, quote just the single most distinctive word and add the author surname unquoted.
 2. For author name particles (de, von, van, du), use the surname without particle as primary - catalogs are inconsistent.
 3. If date is uncertain, do NOT include it in universalTerm.
 4. accentVariants: only populate if the title contains accented characters. Empty array otherwise.
-5. platformNotes: only include platforms where advice differs meaningfully from the universal term. Empty array is fine.
+5. platformNotes: since universalTerm now uses quoted phrases, only add platform notes when a specific platform requires genuinely different handling. The ebayTerm field is now redundant with universalTerm - populate it only if eBay needs a meaningfully different approach.
 6. exclusionTerms: always include -reprint and -facsimile as a baseline. Add title-specific exclusions.
 7. No apostrophes in any string value anywhere. Rephrase all notes to avoid them.
 8. Do not invent details not present in the input.
-9. validationFlags: Cross-check the input against your bibliographic knowledge of 19th and early 20th century photomechanical books. Flag any of the following if detected: misspelled author names (provide standard form), misspelled or truncated titles (provide correct form), incorrect or implausible dates, misattributed publishers or places of publication, missing accents on proper nouns or titles, truncated titles that may cause missed results, known variant titles or alternative forms that should also be searched. If the input appears entirely correct, return an empty array. Only flag genuine issues - do not flag things you are uncertain about.`;
+9. validationFlags: Cross-check the input against your bibliographic knowledge of 19th and early 20th century photomechanical books. Flag any of the following if detected: misspelled author names (provide standard form), misspelled or truncated titles (provide correct form), incorrect or implausible dates, misattributed publishers or places of publication, missing accents on proper nouns or titles, truncated titles that may cause missed results, known variant titles or alternative forms that should also be searched. If the input appears entirely correct, return an empty array. Only flag genuine issues - do not flag things you are uncertain about.
+10. highFalsePositiveRisk: set to true if even the quoted phrase is likely to generate significant noise - for example if the quoted words are very common even in combination, or if this is a periodical title with many volumes.`;
 
   const apiKey = document.getElementById('apiKey').value.trim();
   if (!apiKey) {
