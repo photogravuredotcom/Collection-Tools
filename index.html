@@ -197,6 +197,35 @@
   .copy-all-btn { background: var(--parchment); border: 1px solid var(--ink); color: var(--ink); cursor: pointer; font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.05em; padding: 8px 20px; transition: all 0.15s; margin-top: 16px; display: block; }
   .copy-all-btn:hover { background: var(--ink); color: var(--parchment); }
 
+  /* EXPAND BUTTON */
+  .expand-btn { background: none; border: 1px dashed var(--warm-mid); color: var(--warm-mid); cursor: pointer; font-family: 'DM Mono', monospace; font-size: 0.68rem; letter-spacing: 0.06em; padding: 7px 18px; transition: all 0.15s; margin-top: 10px; display: block; width: 100%; text-align: left; }
+  .expand-btn:hover { border-color: var(--gold); color: var(--gold); border-style: solid; }
+  .expand-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* EXPANDED SEARCH PANEL */
+  .expand-panel { display: none; margin-top: 4px; border: 1px solid var(--aged); border-top: 3px solid var(--gold); background: var(--card-bg); }
+  .expand-panel.visible { display: block; }
+  .expand-panel-head { padding: 12px 16px 10px; border-bottom: 1px solid var(--aged); display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .expand-panel-head h3 { font-family: 'DM Mono', monospace; font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); }
+  .expand-panel-head span { font-family: 'EB Garamond', serif; font-style: italic; font-size: 0.8rem; color: var(--warm-mid); }
+  .expand-section { padding: 10px 16px 8px; border-bottom: 1px solid var(--aged); }
+  .expand-section:last-child { border-bottom: none; padding-bottom: 14px; }
+  .expand-section-label { font-family: 'DM Mono', monospace; font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--warm-mid); margin-bottom: 8px; }
+  .expand-search-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 6px 10px; background: var(--parchment); border: 1px solid transparent; margin-bottom: 5px; }
+  .expand-search-row:last-child { margin-bottom: 0; }
+  .expand-search-row:hover { border-color: var(--warm-mid); }
+  .expand-term { font-family: 'DM Mono', monospace; font-size: 0.82rem; flex: 1; word-break: break-word; line-height: 1.4; }
+  .expand-rationale { font-family: 'EB Garamond', serif; font-style: italic; font-size: 0.82rem; color: var(--gold); margin-top: 3px; }
+  .expand-field-group { background: var(--parchment); border: 1px solid transparent; padding: 8px 10px; margin-bottom: 5px; }
+  .expand-field-group:hover { border-color: var(--warm-mid); }
+  .expand-field-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+  .expand-field { display: inline-flex; align-items: center; gap: 7px; }
+  .expand-field-name { font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--warm-mid); white-space: nowrap; }
+  .expand-field-value { font-family: 'DM Mono', monospace; font-size: 0.82rem; color: var(--ink); }
+  .expand-rationale-small { font-family: 'EB Garamond', serif; font-style: italic; font-size: 0.82rem; color: var(--gold); }
+  .expand-spinner { text-align: center; padding: 24px; font-family: 'EB Garamond', serif; font-style: italic; color: var(--gold); font-size: 0.9rem; }
+  .expand-spinner::after { content: ''; display: block; width: 20px; height: 20px; border: 2px solid var(--aged); border-top-color: var(--gold); border-radius: 50%; margin: 8px auto 0; animation: spin 0.8s linear infinite; }
+
   @media (max-width: 600px) {
     header { padding: 18px 20px; flex-direction: column; align-items: flex-start; }
     main { padding: 0 18px; margin-top: 28px; }
@@ -303,6 +332,18 @@ or    Découvertes en Chaldée 1884"></textarea>
     </div>
 
     <button class="copy-all-btn" onclick="copyAll()">Copy All to Clipboard</button>
+
+    <!-- EXPAND BUTTON -->
+    <button class="expand-btn" id="expandBtn" onclick="expandSearch()" style="display:none;">&#43; Deep Search — generate additional search strings to catch edge cases</button>
+
+    <!-- EXPANDED SEARCH PANEL -->
+    <div class="expand-panel" id="expandPanel">
+      <div class="expand-panel-head">
+        <h3>&#9643; Deep Search Strings</h3>
+        <span>Run each independently as a second pass</span>
+      </div>
+      <div id="expandBody"></div>
+    </div>
   </div>
 </main>
 
@@ -351,10 +392,17 @@ Return ONLY valid JSON. No markdown fences, no preamble, no text after. All stri
 }
 
 JOURNAL ARTICLE DETECTION:
-- Detect whether the input is a journal article citation (clues: article title + journal name, volume/issue number, page range, "In:" prefix, or citation formats like APA/MLA/Chicago that reference a periodical).
+- Detect whether the input is a journal article citation (clues: article title + journal name, volume/issue number, page range, "In:" prefix, "Jahrgang", "Nro.", or citation formats like APA/MLA/Chicago that reference a periodical).
 - Set isJournalArticle to true if the input is clearly a journal article, false otherwise.
 - IF isJournalArticle is true: IGNORE the article title and article author entirely. Build the searchTerm from the JOURNAL NAME words + volume number + year only. The findable object is the journal volume, not the article. Apply all diacritic rules to journal name words. Set authorSurname to empty string.
-- Journal name construction: use 1-2 most distinctive words from the journal name (strip generic words: Journal, Bulletin, Proceedings, Transactions, Review, Annals, Gazette, Magazine, Report, Zeitschrift, Revue, Memoires, Comptes). Add volume number if present. Add year. Example: "Zeitschrift fur Ethnologie vol. 12 1880" → searchTerm: "Ethnologie 12 1880".
+- JOURNAL NAME CONSTRUCTION — follow in order:
+  1. Take all words from the journal name. Strip articles and prepositions (der, die, das, des, de, du, des, le, la, les, of, the, und, and, et). Strip these generic journal-type words: Journal, Bulletin, Proceedings, Transactions, Review, Annals, Gazette, Magazine, Report, Zeitschrift, Revue, Memoires, Comptes, Jahrbuch, Annales, Archives, Berichte, Mitteilungen, Bericht.
+  2. From the remaining words, pick the 1-2 most distinctive (longest, most specific, least common). Proper nouns and institution names are preferred over adjectives. If only one word remains after stripping, use it — do not discard the last distinctive word.
+  3. VOLUME NUMBER: Extract the volume number from whatever format it appears in — "vol. 12", "Bd. 3", "II. Jahrgang", "Jahrgang II", "tome 5", "t. 5", "Band 3", "Nro. 2", "Nr. 4", "no. 6". Roman numerals should be converted to arabic (II → 2, III → 3, etc.). Use the Jahrgang/Band/tome number as the volume. Nro./Nr./no. is the issue number within the volume — include it only if no volume number is present.
+  4. Add the year.
+  5. Strip all diacritics from the result.
+  - Example 1: "Zeitschrift fur Ethnologie vol. 12 1880" → searchTerm: "Ethnologie 12 1880"
+  - Example 2: "Jahrbuch der Kaiserlich Koniglichen Geologischen Reichsanstalt, II. Jahrgang, Nro. 2, 1851" → strip Jahrbuch, der, Kaiserlich, Koniglichen, Geologischen → remaining: Reichsanstalt → volume: II = 2 → searchTerm: "Reichsanstalt 2 1851"
 
 SEARCH TERM CONSTRUCTION RULES — follow this sequence until the result is tight:
 
@@ -538,6 +586,160 @@ function renderResults(d) {
 
   document.getElementById('results').classList.add('visible');
   document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Show expand button, reset panel
+  document.getElementById('expandBtn').style.display = 'block';
+  document.getElementById('expandPanel').classList.remove('visible');
+  document.getElementById('expandBody').innerHTML = '';
+  // Store current citation for expand call
+  window._lastCitation = document.getElementById('citation').value.trim();
+  window._lastParsed = d;
+}
+
+async function expandSearch() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { showError('Please enter your Anthropic API key.'); return; }
+
+  const btn = document.getElementById('expandBtn');
+  btn.disabled = true;
+  const panel = document.getElementById('expandPanel');
+  const body = document.getElementById('expandBody');
+  panel.classList.add('visible');
+  body.innerHTML = '<div class="expand-spinner">Consulting deeper sources…</div>';
+
+  const d = window._lastParsed || {};
+  const citation = window._lastCitation || '';
+
+  const prompt = `You are an expert rare book and auction search strategist specializing in 19th and early 20th century photomechanical illustrated books, photogravure, collotype, woodburytype, and related processes.
+
+A user has already generated a primary search term for this citation. Now generate a comprehensive set of ADDITIONAL search strings designed to catch listings that the primary term might miss.
+
+ORIGINAL CITATION: ${citation}
+
+ALREADY EXTRACTED:
+- Primary search term: ${d.searchTerm || ''}
+- Author surname: ${d.authorSurname || '(none/multiple)'}
+- Entry label: ${d.entryLabel || ''}
+
+Return ONLY valid JSON. No markdown fences, no preamble, no text after.
+
+{
+  "fielded": [
+    {
+      "label": "Short description of this search strategy (e.g. Author + Year only)",
+      "fields": [
+        { "field": "Author", "value": "value to enter — ALL diacritics stripped" },
+        { "field": "Title", "value": "value to enter — ALL diacritics stripped" },
+        { "field": "Year", "value": "year only" }
+      ],
+      "rationale": "One sentence: what failure mode this catches that the primary term misses."
+    }
+  ],
+  "titleVariants": [
+    {
+      "term": "The variant search string — ALL diacritics stripped",
+      "rationale": "Why this variant exists — OCR error, common abbreviation, English translation, bookseller convention, etc."
+    }
+  ]
+}
+
+FIELDED SEARCH RULES:
+- Generate 2-4 fielded searches, each targeting a different failure mode:
+  1. Author surname + Year only (no title) — catches listings where title is mangled or abbreviated
+  2. Most distinctive title word + Year only (no author) — catches listings with wrong/missing author attribution  
+  3. Publisher + Year (if publisher is well-known and distinctive) — catches listings with both title and author errors
+  4. Broader title word only (no author, no year) — maximum recall, use only if title word is highly distinctive
+- Each fielded search: only include fields that add value. Omit fields that would over-constrain.
+- ALL diacritics must be stripped from all values — plain ASCII only.
+- For Author field: surname only, no particles, no initials.
+- For Title field: 1-2 most distinctive words only. Never a full title.
+- Only include Year field when it meaningfully narrows results.
+- Do not repeat the primary search term as a fielded search.
+
+TITLE VARIANT RULES:
+- Draw on genuine bibliographic knowledge of this specific work and period.
+- Generate 2-6 variants covering: common OCR corruptions of this title, known short titles or abbreviated forms booksellers use, English or Latin translations if the title is in another language, alternate spellings used in period catalogues, variant forms with/without subtitle, any known alternate title under which the work is sometimes listed.
+- Only include variants you are genuinely confident exist or are plausible for this work and era.
+- ALL diacritics stripped — plain ASCII.
+- Do not include the primary search term itself as a variant.
+- Empty array if no meaningful variants exist.
+
+No apostrophes in any string value.`;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1500,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) { body.innerHTML = '<div style="padding:12px;color:var(--rust);font-family:EB Garamond,serif;">API error: ' + esc(data.error.message || '') + '</div>'; return; }
+
+    const raw = data.content.map(i => i.text || '').join('');
+    const parsed = extractJSON(raw);
+    if (!parsed) { body.innerHTML = '<div style="padding:12px;color:var(--rust);font-family:EB Garamond,serif;">Could not parse response. Please try again.</div>'; return; }
+    renderExpanded(parsed);
+
+  } catch(e) {
+    body.innerHTML = '<div style="padding:12px;color:var(--rust);font-family:EB Garamond,serif;">Something went wrong: ' + esc(e.message) + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '↺ Regenerate Deep Search';
+  }
+}
+
+function renderExpanded(d) {
+  const body = document.getElementById('expandBody');
+  body.innerHTML = '';
+
+  // Fielded searches
+  const fielded = d.fielded || [];
+  if (fielded.length) {
+    const sec = document.createElement('div');
+    sec.className = 'expand-section';
+    sec.innerHTML = '<div class="expand-section-label">Fielded Searches — enter values into separate platform fields</div>';
+    fielded.forEach(s => {
+      const group = document.createElement('div');
+      group.className = 'expand-field-group';
+      const fieldHtml = (s.fields || []).map(f =>
+        `<div class="expand-field"><span class="expand-field-name">${esc(f.field)}</span><span class="expand-field-value">${esc(f.value)}</span><button class="copy-btn" onclick="copyText(${JSON.stringify(f.value)}, this)" style="margin-left:4px;">Copy</button></div>`
+      ).join('');
+      group.innerHTML = `<div style="font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--ink);margin-bottom:6px;letter-spacing:0.03em;">${esc(s.label)}</div>
+        <div class="expand-field-row">${fieldHtml}</div>
+        <div class="expand-rationale-small">${esc(s.rationale || '')}</div>`;
+      sec.appendChild(group);
+    });
+    body.appendChild(sec);
+  }
+
+  // Title variants
+  const variants = d.titleVariants || [];
+  if (variants.length) {
+    const sec = document.createElement('div');
+    sec.className = 'expand-section';
+    sec.innerHTML = '<div class="expand-section-label">Title Variants — known alternate forms worth searching as keywords</div>';
+    variants.forEach(v => {
+      const row = document.createElement('div');
+      row.className = 'expand-search-row';
+      row.innerHTML = `<div style="flex:1"><div class="expand-term">${esc(v.term)}</div><div class="expand-rationale">${esc(v.rationale || '')}</div></div>
+        <button class="copy-btn" onclick="copyText(${JSON.stringify(v.term)}, this)">Copy</button>`;
+      sec.appendChild(row);
+    });
+    body.appendChild(sec);
+  }
+
+  if (!fielded.length && !variants.length) {
+    body.innerHTML = '<div style="padding:14px 16px;font-family:EB Garamond,serif;font-style:italic;color:var(--warm-mid);">No additional search strings generated for this title.</div>';
+  }
 }
 
 function copyField(id, btn) { copyText(document.getElementById(id).textContent, btn); }
