@@ -219,41 +219,31 @@ or    Découvertes en Chaldée 1884"></textarea>
       <div class="block-body" id="validationBody"></div>
     </div>
 
-    <!-- viaLibri entry fields -->
+    <!-- Search term block -->
     <div class="result-block block-primary">
       <div class="block-head">
-        <h3>viaLibri Entry</h3>
-        <span class="head-sub">Author field + Keyword field</span>
+        <h3>Search Term</h3>
+        <span class="head-sub">Use on all platforms</span>
       </div>
       <div class="block-body">
         <div class="entry-grid">
           <div class="entry-field">
-            <div class="entry-field-label">Author Field</div>
+            <div class="entry-field-label">Author Field <span style="font-weight:400;opacity:0.6">(viaLibri only)</span></div>
             <div class="entry-field-value" id="authorField">—</div>
             <div class="entry-field-copy"><button class="copy-btn" onclick="copyField('authorField', this)">Copy</button></div>
           </div>
           <div class="entry-field">
-            <div class="entry-field-label">Keyword Field</div>
+            <div class="entry-field-label">Keyword Field / All Other Platforms</div>
             <div class="entry-field-value" id="keywordField">—</div>
             <div class="entry-field-copy"><button class="copy-btn" onclick="copyField('keywordField', this)">Copy</button></div>
           </div>
         </div>
+        <div class="primary-term" id="universalTerm" style="display:none;"></div>
+        <div class="term-sub" id="universalNote" style="margin-top:8px;"></div>
         <div class="reminder-box">
           <strong>&#10003; viaLibri Reminders</strong>
           Check <strong>No ISBNs</strong> and <strong>No PODs</strong> on every search &nbsp;&middot;&nbsp; Quoted phrases only work in the <strong>Keyword field</strong>, not the Title field
         </div>
-      </div>
-    </div>
-
-    <!-- Universal term for other platforms -->
-    <div class="result-block block-primary">
-      <div class="block-head">
-        <h3>Universal Term <span style="font-weight:400;opacity:0.55;font-size:0.9em">(all other platforms)</span></h3>
-        <button class="copy-btn" onclick="copyField('universalTerm', this)">Copy</button>
-      </div>
-      <div class="block-body">
-        <div class="primary-term" id="universalTerm"></div>
-        <div class="term-sub" id="universalNote"></div>
       </div>
     </div>
 
@@ -318,10 +308,10 @@ Return ONLY valid JSON. No markdown fences, no extra text. All string values mus
   "validationFlags": [
     { "field": "title or author or date or publisher", "issue": "description of potential error or variant", "suggestion": "corrected or standard form" }
   ],
-  "authorSurname": "Author surname only, no particles (de, von, van, du), no initials. Empty string if no clear author.",
-  "keywordPhrase": "The quoted phrase for the viaLibri Keyword field. Format: the most distinctive 2-4 consecutive title words in double quotes. Words must be genuinely adjacent in the title. Example: \"Decouvertes Chaldee\" or \"Naturalistic Photography\". Single most distinctive word if no good phrase exists.",
-  "universalTerm": "Combined term for all other platforms: quoted phrase followed by author surname unquoted. Example: \"Decouvertes Chaldee\" Sarzec",
-  "universalNote": "One sentence on why these words were chosen and that they are consecutive in the title.",
+  "authorSurname": "Single clear primary author surname only, no particles (de, von, van, du), no initials. Empty string if multiple authors, editor-only, corporate/institutional authorship, or authorship is unclear.",
+  "keywordPhrase": "The optimized keyword search string. See rules below for full construction logic. Minimum two terms always. No quotes unless last resort.",
+  "universalTerm": "Same as keywordPhrase - used for all platforms including viaLibri keyword field.",
+  "universalNote": "One sentence explaining the term construction: which words were chosen, why, and what rule applied.",
   "accentVariants": [
     { "original": "accented word", "unaccented": "unaccented version", "note": "platforms that need unaccented" }
   ],
@@ -334,16 +324,49 @@ Return ONLY valid JSON. No markdown fences, no extra text. All string values mus
   ]
 }
 
-RULES:
-1. keywordPhrase: ONLY use words that are genuinely consecutive in the actual title. Never combine non-adjacent words. If no good consecutive phrase exists, use the single most distinctive word without quotes.
-2. authorSurname: surname only, no particles, no initials, no punctuation.
-3. accentVariants: only if title contains accented characters. Empty array otherwise.
-4. exclusionTerms: always include reprint and facsimile as baseline. Add title-specific ones. Do NOT include square brackets in the term value - just the word itself.
-5. platformNotes: only where handling differs meaningfully from universalTerm. Empty array is fine.
-6. validationFlags: check against bibliographic knowledge of 19th-20th century photomechanical books. Flag misspellings, wrong dates, missing accents, variant titles worth also searching. Empty array if everything looks correct. Only flag genuine issues.
-7. highFalsePositiveRisk: true if quoted phrase words are very common even in combination, or if this is a periodical with many volumes.
-8. No apostrophes in any string value. Rephrase notes to avoid them.
-9. Detect language automatically - do not rely on user input for this.`;
+RULES FOR BUILDING keywordPhrase AND universalTerm:
+
+AUTHOR RULE:
+- Single clear primary author: use surname only, no particles (de, von, van, du), no initials
+- Multiple authors or editors: omit author entirely, rely on title words and year
+- Corporate, institutional, or unclear authorship: omit author, rely on title words and year
+
+TITLE WORD RULE:
+- Use words from the MAIN title only. Ignore subtitles (anything after a colon or dash).
+- If the main title is 6 words or fewer: identify the 1-2 most distinctive words
+- If the main title is more than 6 words: assume sellers will use a shortened version. Pick the 1-2 most distinctive words from the first half of the title only.
+- Never use generic words: Album, Atlas, Voyage, Histoire, Journal, Photography, Art, Illustrated, Collection, Selected, Works, New, Studies, Notes, Survey, Introduction, Guide, Complete
+
+YEAR RULE:
+- Include year when: title words plus author still feel loose or ambiguous; author has many works with similar titles; multiple editions exist
+- Omit year when: date is uncertain (marked ??, range, or unknown); title plus author is already highly distinctive
+- Year is the preferred third element when in doubt - add it before resorting to quotes
+
+QUOTES RULE - LAST RESORT ONLY:
+- Only use quotes when title words are ALL common and only become distinctive in combination
+- Never quote if two unquoted distinctive words already make a tight search
+- When quoting, only quote words that are genuinely consecutive in the actual title
+
+MINIMUM AND SAFETY RULES:
+- ALWAYS produce at least two terms (words or word plus year)
+- IF IN DOUBT: add one more term - a second title word, the year, or the author surname
+- The goal is precision without over-restriction. Better to add one term too many than miss a valid listing.
+- highFalsePositiveRisk: true if even with best terms the search is likely to return significant noise
+
+CONSTRUCTION SEQUENCE - follow in order until the result feels tight:
+Step 1: Most distinctive title word + author surname (if single clear primary author)
+Step 2: If still loose, add year OR second distinctive title word
+Step 3: If title words are all common, try quoting the most distinctive consecutive phrase
+Step 4: If still loose after quoting, add year
+Step 5: If no clear author and title words are weak, use year as anchor
+
+OTHER RULES:
+- accentVariants: only if title contains accented characters. Empty array otherwise.
+- exclusionTerms: always include reprint and facsimile as baseline. Add title-specific ones. Do NOT include square brackets in the term value.
+- platformNotes: only where handling differs meaningfully. Empty array is fine.
+- validationFlags: check against bibliographic knowledge of 19th-20th century photomechanical books. Flag misspellings, wrong dates, missing accents, variant titles. Empty array if correct. Only flag genuine issues.
+- No apostrophes in any string value. Rephrase to avoid them.
+- Detect language automatically.`;
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -424,12 +447,11 @@ function renderResults(d) {
     vb.style.display = 'none';
   }
 
-  // viaLibri fields
+  // Search term fields
   document.getElementById('authorField').textContent = d.authorSurname || '—';
-  document.getElementById('keywordField').textContent = d.keywordPhrase || '—';
-
-  // Universal term
-  document.getElementById('universalTerm').textContent = d.universalTerm || '';
+  // keywordPhrase and universalTerm are now the same - show in keyword field
+  const term = d.keywordPhrase || d.universalTerm || '—';
+  document.getElementById('keywordField').textContent = term;
   document.getElementById('universalNote').textContent = d.universalNote || '';
 
   // Accent variants
@@ -507,12 +529,10 @@ function copyText(text, btn) {
 function copyAll() {
   const author = document.getElementById('authorField').textContent;
   const keyword = document.getElementById('keywordField').textContent;
-  const universal = document.getElementById('universalTerm').textContent;
   const excls = Array.from(document.querySelectorAll('.excl-tag')).map(el => '[' + el.querySelector('span:nth-child(2)').textContent + ']');
 
-  let out = 'VIALIBRE AUTHOR FIELD: ' + author;
-  out += '\nVIALIBRI KEYWORD FIELD: ' + keyword;
-  out += '\nUNIVERSAL (other platforms): ' + universal;
+  let out = 'AUTHOR FIELD (viaLibri): ' + author;
+  out += '\nSEARCH TERM (all platforms): ' + keyword;
   if (excls.length) out += '\nEXCLUSIONS: ' + excls.join(' ');
 
   navigator.clipboard.writeText(out).then(() => {
