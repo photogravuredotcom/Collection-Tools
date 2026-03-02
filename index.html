@@ -255,6 +255,12 @@ or    Découvertes en Chaldée 1884"></textarea>
       <p id="warningText"></p>
     </div>
 
+    <!-- Journal article mode banner -->
+    <div class="diacritic-banner" id="journalBanner" style="border-left-color: var(--gold);">
+      <strong style="color:var(--gold);">&#9656; Journal Volume Mode</strong>
+      <p id="journalText">Input detected as a journal article. Search term targets the journal volume, not the article title.</p>
+    </div>
+
     <!-- SEARCH TERM — hero position -->
     <div class="term-hero">
       <div class="term-hero-inner">
@@ -325,6 +331,7 @@ Return ONLY valid JSON. No markdown fences, no preamble, no text after. All stri
 
 {
   "entryLabel": "Short label: primary author surname if single, Short Title, Date. Max 70 chars.",
+  "isJournalArticle": true or false,
   "highFalsePositiveRisk": true or false,
   "warningText": "If high risk: brief explanation. Empty string if not.",
   "validationFlags": [
@@ -342,6 +349,12 @@ Return ONLY valid JSON. No markdown fences, no preamble, no text after. All stri
     { "platform": "Platform name", "note": "Only when handling differs meaningfully from searchTerm." }
   ]
 }
+
+JOURNAL ARTICLE DETECTION:
+- Detect whether the input is a journal article citation (clues: article title + journal name, volume/issue number, page range, "In:" prefix, or citation formats like APA/MLA/Chicago that reference a periodical).
+- Set isJournalArticle to true if the input is clearly a journal article, false otherwise.
+- IF isJournalArticle is true: IGNORE the article title and article author entirely. Build the searchTerm from the JOURNAL NAME words + volume number + year only. The findable object is the journal volume, not the article. Apply all diacritic rules to journal name words. Set authorSurname to empty string.
+- Journal name construction: use 1-2 most distinctive words from the journal name (strip generic words: Journal, Bulletin, Proceedings, Transactions, Review, Annals, Gazette, Magazine, Report, Zeitschrift, Revue, Memoires, Comptes). Add volume number if present. Add year. Example: "Zeitschrift fur Ethnologie vol. 12 1880" → searchTerm: "Ethnologie 12 1880".
 
 SEARCH TERM CONSTRUCTION RULES — follow this sequence until the result is tight:
 
@@ -457,6 +470,12 @@ function renderResults(d) {
     });
     vb.style.display = 'block';
   } else { vb.style.display = 'none'; }
+
+  // Journal article mode banner
+  const journalBanner = document.getElementById('journalBanner');
+  if (d.isJournalArticle) {
+    journalBanner.classList.add('visible');
+  } else { journalBanner.classList.remove('visible'); }
 
   // Warning
   const wb = document.getElementById('warningBanner');
