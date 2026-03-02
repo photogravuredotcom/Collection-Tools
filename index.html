@@ -16,6 +16,8 @@
     --warm-mid: #c4b89a;
     --rust: #8b3a1a;
     --gold: #a07840;
+    --amber: #b06820;
+    --amber-bg: #fdf4e7;
     --shadow: rgba(26,20,16,0.15);
     --card-bg: #faf7f0;
   }
@@ -130,6 +132,26 @@
   .author-pill-label { font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--warm-mid); }
   .author-pill-value { font-family: 'DM Mono', monospace; font-size: 0.9rem; color: var(--ink); }
 
+  /* Diacritic strategy banner */
+  .diacritic-banner {
+    display: none;
+    background: var(--amber-bg);
+    border-left: 3px solid var(--amber);
+    padding: 12px 16px;
+    margin-bottom: 14px;
+  }
+  .diacritic-banner.visible { display: block; }
+  .diacritic-banner strong {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--amber);
+    display: block;
+    margin-bottom: 4px;
+  }
+  .diacritic-banner p { font-family: 'EB Garamond', serif; font-size: 0.92rem; color: var(--ink); }
+
   /* Warning */
   .warning-banner { display: none; background: #fdf3ec; border-left: 3px solid var(--rust); padding: 10px 16px; margin-bottom: 14px; }
   .warning-banner.visible { display: block; }
@@ -140,7 +162,6 @@
   .block { background: var(--card-bg); border: 1px solid var(--aged); margin-bottom: 12px; position: relative; }
   .block::before { content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%; }
   .block-validation::before { background: var(--rust); }
-  .block-accent::before { background: var(--gold); }
   .block-exclude::before { background: var(--rust); }
   .block-note::before { background: var(--warm-mid); }
 
@@ -251,10 +272,10 @@ or    Découvertes en Chaldée 1884"></textarea>
       <button class="copy-btn" style="margin-left:4px;" onclick="copyField('authorField', this)">Copy</button>
     </div>
 
-    <!-- Accent variants -->
-    <div class="block block-accent" id="accentBlock" style="display:none;">
-      <div class="block-head"><h3>Accent Variants</h3></div>
-      <div class="block-body" id="accentBody"></div>
+    <!-- Diacritic strategy banner -->
+    <div class="diacritic-banner" id="diacriticBanner">
+      <strong>&#9670; Diacritic Strategy</strong>
+      <p id="diacriticText"></p>
     </div>
 
     <!-- Exclusion terms -->
@@ -309,12 +330,10 @@ Return ONLY valid JSON. No markdown fences, no preamble, no text after. All stri
   "validationFlags": [
     { "field": "title or author or date or publisher", "issue": "description", "suggestion": "corrected form" }
   ],
-  "searchTerm": "The optimized search string. See construction rules below.",
+  "searchTerm": "The optimized UNIVERSAL search string with ALL diacritics stripped. See construction rules below.",
   "searchNote": "One sentence explaining what rule was applied and why these terms were chosen.",
-  "authorSurname": "Single primary author surname only, no particles, no initials. Empty string if multiple authors, editors, corporate/institutional, or unclear.",
-  "accentVariants": [
-    { "original": "accented word", "unaccented": "unaccented version", "note": "which platforms need unaccented" }
-  ],
+  "authorSurname": "Single primary author surname only, no particles (de, von, van, du, le, la), no initials, no punctuation. Empty string if multiple authors, editors, corporate/institutional, unclear, or if stripping the surname diacritics creates a common word or causes ambiguity.",
+  "diacriticStrategy": "Explain the diacritic decision made for this input. If the title or author contained accented characters, describe: (1) whether the stripped form is safe to use universally; (2) whether any stripped word collides with a common unrelated word (word collision risk); (3) whether the author surname was affected and why it was included or omitted. If no diacritics were present, return an empty string.",
   "exclusionTerms": [
     { "term": "word without brackets", "reason": "why exclude" }
   ],
@@ -356,13 +375,18 @@ HARD RULES:
 - Date uncertain (marked ??, range, or unknown): omit year
 - Detect language automatically — do not ask user
 
+DIACRITIC RULES:
+- ALL diacritics must be stripped from the searchTerm — the output must be plain ASCII. Strip accents, cedillas, umlauts, tildes, and all other diacritical marks universally. Most auction and book platforms do not normalize diacritics and a stripped form matches both accented and unaccented listings.
+- WORD COLLISION CHECK: After stripping, check whether any resulting word becomes a common English, French, German, Spanish, or Italian word with a different meaning (e.g. a stripped proper noun that becomes "de", "or", "la", "mer", "cote", "ou"). If collision risk is high, compensate by adding the year or an additional distinctive title word to the searchTerm, and document this in diacriticStrategy.
+- AUTHOR SURNAME DIACRITIC RISK: If stripping diacritics from the author surname produces a common word or an ambiguous result that would pollute results, omit the surname from searchTerm entirely and set authorSurname to empty string. Document this in diacriticStrategy.
+- Document all diacritic decisions — safe strip, collision risk, or surname omission — in the diacriticStrategy field. If no diacritics were present, return an empty string for diacriticStrategy.
+
 VALIDATION:
 - Cross-check against bibliographic knowledge of 19th-20th century photomechanical books
 - Flag misspellings, wrong dates, missing accents, known variant titles worth also searching
 - Only flag genuine issues you are confident about. Empty array if input looks correct.
 
 OTHER:
-- accentVariants: only if title has accented characters. Empty array otherwise.
 - exclusionTerms: always include reprint and facsimile. Add title-specific ones. No brackets in term value.
 - platformNotes: only where handling genuinely differs. Empty array is fine.
 - No apostrophes anywhere in any string value.`;
@@ -453,21 +477,13 @@ function renderResults(d) {
     authorPill.style.display = 'inline-flex';
   } else { authorPill.style.display = 'none'; }
 
-  // Accent variants
-  const accentBlock = document.getElementById('accentBlock');
-  const accentBody = document.getElementById('accentBody');
-  accentBody.innerHTML = '';
-  const accents = d.accentVariants || [];
-  if (accents.length) {
-    accents.forEach(a => {
-      const row = document.createElement('div');
-      row.className = 'term-row';
-      row.innerHTML = `<div style="flex:1"><div class="term-label">${esc(a.original)} &rarr; ${esc(a.unaccented)}</div><div class="term-sub">${esc(a.note || '')}</div></div>
-        <button class="copy-btn" onclick="copyText(${JSON.stringify(a.unaccented)}, this)">Copy</button>`;
-      accentBody.appendChild(row);
-    });
-    accentBlock.style.display = 'block';
-  } else { accentBlock.style.display = 'none'; }
+  // Diacritic strategy banner
+  const diacriticBanner = document.getElementById('diacriticBanner');
+  const diacriticText = document.getElementById('diacriticText');
+  if (d.diacriticStrategy && d.diacriticStrategy.trim()) {
+    diacriticText.textContent = d.diacriticStrategy;
+    diacriticBanner.classList.add('visible');
+  } else { diacriticBanner.classList.remove('visible'); }
 
   // Exclusions
   const excludeBlock = document.getElementById('excludeBlock');
