@@ -371,11 +371,6 @@ or    Découvertes en Chaldée 1884"></textarea>
 
       <button class="generate" id="mergeRunBtn" onclick="runMerge()" style="margin-top:12px;">Merge</button>
       <div class="error-msg" id="mergeErrorMsg"></div>
-
-      <div class="batch-results-wrap" id="mergeResultsWrap" style="display:none;">
-        <div style="font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--gold);margin-bottom:8px;" id="mergeResultsLabel"></div>
-        <button class="batch-download-btn" onclick="downloadMergedXLSX()">&#8595; Download Merged XLSX</button>
-      </div>
     </div>
 
     <!-- API key (shared) -->
@@ -389,6 +384,12 @@ or    Découvertes en Chaldée 1884"></textarea>
   </div>
 
   <div class="spinner" id="spinner">Consulting the archive…</div>
+
+  <!-- Merge results — outside input panel so not clipped -->
+  <div class="batch-results-wrap" id="mergeResultsWrap" style="display:none;margin-bottom:24px;">
+    <div style="font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--gold);margin-bottom:8px;" id="mergeResultsLabel"></div>
+    <button class="batch-download-btn" onclick="downloadMergedXLSX()">&#8595; Download Merged XLSX</button>
+  </div>
 
   <div class="results" id="results">
     <div class="result-label">Results for</div>
@@ -1222,11 +1223,9 @@ function normTitle(s) {
 }
 
 function extractTitle(fullCitation) {
-  // XLSX citations are typically "Surname, Firstname. Title. Publisher, Year."
-  // Strip the author (everything up to and including the first period + space)
-  const firstPeriod = fullCitation.indexOf('. ');
-  const withoutAuthor = firstPeriod >= 0 ? fullCitation.slice(firstPeriod + 2) : fullCitation;
-  // Also strip everything after the second period (publisher/date)
+  const s = String(fullCitation || '');
+  const firstPeriod = s.indexOf('. ');
+  const withoutAuthor = firstPeriod >= 0 ? s.slice(firstPeriod + 2) : s;
   const secondPeriod = withoutAuthor.indexOf('. ');
   return secondPeriod >= 0 ? withoutAuthor.slice(0, secondPeriod) : withoutAuthor;
 }
@@ -1324,7 +1323,6 @@ function checkMergeReady() {
 }
 
 function runMerge() {
-  alert('runMerge called — generated rows: ' + mergeGeneratedRows.length + ', original rows: ' + mergeOriginalRows.length);
   hideMergeError();
   try {
     if (!mergeGeneratedRows.length) { showMergeError('XLSX not loaded — please upload the generated search terms file first.'); return; }
