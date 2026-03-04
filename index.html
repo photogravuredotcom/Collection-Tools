@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Search Term Generator — Photogravure Collection</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -325,7 +326,7 @@ or    Découvertes en Chaldée 1884"></textarea>
             <tbody id="batchTableBody"></tbody>
           </table>
         </div>
-        <button class="batch-download-btn" onclick="downloadCSV()">&#8595; Download CSV</button>
+        <button class="batch-download-btn" onclick="downloadXLSX()">&#8595; Download XLSX</button>
       </div>
     </div>
 
@@ -1047,41 +1048,50 @@ function renderBatchResults() {
   wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function downloadCSV() {
-  const headers = ['Original Citation', 'viaLibri/AbeBooks/Biblio', 'Other Platforms', 'Author Field', 'Date Field', 'Notes'];
-  const csvRows = [headers.map(csvEsc).join(',')];
+function downloadXLSX() {
+  const headers = ['Original Citation', 'viaLibri / AbeBooks / Biblio', 'Other Platforms', 'Author Field', 'Date Field', 'Notes'];
+  const rows = [headers];
+
   for (const row of batchResults) {
     if (row.error) {
-      csvRows.push([csvEsc(row.citation), csvEsc('ERROR: ' + row.error), '', '', '', ''].join(','));
+      rows.push([row.citation, 'ERROR: ' + row.error, '', '', '', '']);
     } else {
       const d = row.result;
       const accented = d.searchTermAccented || d.searchTerm || '';
       const stripped = d.searchTerm || '';
       const otherPlatforms = stripped !== accented ? stripped : '';
       const notes = d.highFalsePositiveRisk ? (d.warningText || 'High false-positive risk') : '';
-      csvRows.push([
-        csvEsc(row.citation),
-        csvEsc(accented),
-        csvEsc(otherPlatforms),
-        csvEsc(d.authorSurname || ''),
-        csvEsc(d.publicationYear || ''),
-        csvEsc(notes)
-      ].join(','));
+      rows.push([row.citation, accented, otherPlatforms, d.authorSurname || '', d.publicationYear || '', notes]);
     }
   }
-  const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'search-terms-' + new Date().toISOString().slice(0,10) + '.csv';
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
-function csvEsc(val) {
-  const s = String(val || '');
-  if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
-  return s;
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+
+  // Bold headers
+  const headerRange = XLSX.utils.decode_range(ws['!ref']);
+  for (let c = headerRange.s.c; c <= headerRange.e.c; c++) {
+    const cellRef = XLSX.utils.encode_cell({ r: 0, c });
+    if (ws[cellRef]) {
+      ws[cellRef].s = { font: { bold: true } };
+    }
+  }
+
+  // Column widths
+  ws['!cols'] = [
+    { wch: 55 }, // Original Citation
+    { wch: 30 }, // viaLibri
+    { wch: 28 }, // Other Platforms
+    { wch: 16 }, // Author Field
+    { wch: 12 }, // Date Field
+    { wch: 40 }, // Notes
+  ];
+
+  // Freeze header row
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Search Terms');
+  XLSX.writeFile(wb, 'search-terms-' + new Date().toISOString().slice(0, 10) + '.xlsx');
 }
 
 function showBatchError(msg) { const el = document.getElementById('batchErrorMsg'); el.textContent = msg; el.classList.add('visible'); }
