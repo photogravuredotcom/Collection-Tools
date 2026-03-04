@@ -1307,39 +1307,61 @@ function runMerge() {
   const titleColIdx = parseInt(document.getElementById('mergeTitleCol').value);
   if (isNaN(titleColIdx)) { showMergeError('Please select the title column.'); return; }
 
-  // Which platform columns were checked
   const checkedCols = Array.from(document.querySelectorAll('#mergePlatformCols input:checked'))
     .map(cb => parseInt(cb.value));
   if (!checkedCols.length) { showMergeError('Please check at least one platform column.'); return; }
 
   const platformHeaders = checkedCols.map(i => mergeOriginalHeaders[i]);
-  const MATCH_THRESHOLD = 0.3;
+  const MATCH_THRESHOLD = 0.15; // lowered from 0.3
 
-  // For each XLSX base row, find best matching CSV row and pull platform values
+  let matchCount = 0, noMatchCount = 0;
+  const diagnostics = [];
+
   mergedOutput = mergeGeneratedRows.map(xlsxRow => {
-    // XLSX citation is in column 1 (index 0)
     const xlsxTitle = xlsxRow[0] || '';
     let bestScore = 0, bestIdx = -1;
     mergeOriginalRows.forEach((csvRow, i) => {
+      // Try matching against CSV title col
       const score = fuzzyScore(xlsxTitle, csvRow[titleColIdx]);
       if (score > bestScore) { bestScore = score; bestIdx = i; }
     });
+
+    if (diagnostics.length < 8) {
+      const bestCsvTitle = bestIdx >= 0 ? mergeOriginalRows[bestIdx][titleColIdx] : '—';
+      diagnostics.push({ xlsxTitle, bestCsvTitle, score: bestScore, matched: bestScore >= MATCH_THRESHOLD });
+    }
+
     const platformVals = checkedCols.map(ci =>
       (bestScore >= MATCH_THRESHOLD && bestIdx >= 0) ? (mergeOriginalRows[bestIdx][ci] || '') : ''
     );
-    return { xlsxRow, platformVals, matched: bestScore >= MATCH_THRESHOLD };
+    if (bestScore >= MATCH_THRESHOLD) matchCount++; else noMatchCount++;
+    return { xlsxRow, platformVals, matched: bestScore >= MATCH_THRESHOLD, score: bestScore };
   });
 
-  const matched = mergedOutput.filter(r => r.matched).length;
-  const unmatched = mergedOutput.length - matched;
-  document.getElementById('mergeResultsLabel').textContent =
-    matched + ' rows matched · ' + unmatched + ' unmatched (platform columns blank) · ' +
-    platformHeaders.length + ' platform columns added';
-  document.getElementById('mergeResultsWrap').style.display = 'block';
-
-  // Store for download
-  mergedOutput._platformHeaders = platformHeaders;
+  const platformHeaders2 = platformHeaders;
+  mergedOutput._platformHeaders = platformHeaders2;
   mergedOutput._xlsxHeaders = mergeGeneratedHeaders;
+
+  // Build diagnostics HTML
+  let diagHtml = '<div style="margin-top:14px;border-top:1px solid var(--aged);padding-top:12px;">';
+  diagHtml += '<div style="font-family:\'DM Mono\',monospace;font-size:0.62rem;letter-spacing:0.07em;text-transform:uppercase;color:var(--warm-mid);margin-bottom:8px;">Match diagnostics — first 8 rows</div>';
+  diagHtml += '<table style="width:100%;font-family:\'DM Mono\',monospace;font-size:0.68rem;border-collapse:collapse;">';
+  diagHtml += '<tr><th style="text-align:left;padding:3px 6px;border-bottom:1px solid var(--aged);">XLSX Citation</th><th style="text-align:left;padding:3px 6px;border-bottom:1px solid var(--aged);">Best CSV Match</th><th style="padding:3px 6px;border-bottom:1px solid var(--aged);">Score</th><th style="padding:3px 6px;border-bottom:1px solid var(--aged);">✓</th></tr>';
+  diagnostics.forEach(d => {
+    const scoreColor = d.matched ? '#2a6a2a' : '#8b3a1a';
+    diagHtml += `<tr>
+      <td style="padding:3px 6px;border-bottom:1px solid var(--aged);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(d.xlsxTitle.slice(0,60))}</td>
+      <td style="padding:3px 6px;border-bottom:1px solid var(--aged);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(d.bestCsvTitle.slice(0,60))}</td>
+      <td style="padding:3px 6px;border-bottom:1px solid var(--aged);text-align:center;color:${scoreColor};">${d.score.toFixed(2)}</td>
+      <td style="padding:3px 6px;border-bottom:1px solid var(--aged);text-align:center;color:${scoreColor};">${d.matched ? '✓' : '✗'}</td>
+    </tr>`;
+  });
+  diagHtml += '</table></div>';
+
+  document.getElementById('mergeResultsLabel').innerHTML =
+    matchCount + ' rows matched · ' + noMatchCount + ' unmatched · ' +
+    platformHeaders.length + ' platform columns added' + diagHtml;
+  document.getElementById('mergeResultsWrap').style.display = 'block';
 }
 
 async function downloadMergedXLSX() {
