@@ -250,10 +250,12 @@ or    Découvertes en Chaldée 1884"></textarea>
     <button class="generate" id="generateBtn" onclick="generateTerms()">Generate Search Terms</button>
     <div class="error-msg" id="errorMsg"></div>
 
-    <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--aged);">
-      <label class="panel-label">API Key</label>
-      <input type="password" id="apiKey" placeholder="Paste your Anthropic API key (sk-ant-…)" />
-      <p class="hint">Saved in your browser automatically.</p>
+    <div style="margin-top:16px;">
+      <button type="button" onclick="toggleApiKey()" style="background:none;border:none;cursor:pointer;font-family:'DM Mono',monospace;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-mid);padding:0;">&#9660; API Key</button>
+      <div id="apiKeyPanel" style="display:none;margin-top:8px;">
+        <input type="password" id="apiKey" placeholder="Paste your Anthropic API key (sk-ant-…)" />
+        <p class="hint">Saved in your browser automatically.</p>
+      </div>
     </div>
   </div>
 
@@ -808,13 +810,27 @@ function showError(msg) { const el = document.getElementById('errorMsg'); el.tex
 function hideError() { document.getElementById('errorMsg').classList.remove('visible'); }
 function esc(str) { return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+function toggleApiKey() {
+  const panel = document.getElementById('apiKeyPanel');
+  const btn = panel.previousElementSibling;
+  const visible = panel.style.display !== 'none';
+  panel.style.display = visible ? 'none' : 'block';
+  btn.innerHTML = (visible ? '&#9660;' : '&#9650;') + ' API Key';
+}
+
 // API key persistence
 document.getElementById('apiKey').addEventListener('change', function() {
   if (this.value.trim()) localStorage.setItem('pgApiKey', this.value.trim());
 });
 window.addEventListener('load', function() {
   const saved = localStorage.getItem('pgApiKey');
-  if (saved) document.getElementById('apiKey').value = saved;
+  if (saved) {
+    document.getElementById('apiKey').value = saved;
+  } else {
+    // No key saved — show the field so user knows to enter it
+    document.getElementById('apiKeyPanel').style.display = 'block';
+    document.querySelector('[onclick="toggleApiKey()"]').innerHTML = '&#9650; API Key';
+  }
 });
 document.getElementById('citation').addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.ctrlKey) generateTerms();
