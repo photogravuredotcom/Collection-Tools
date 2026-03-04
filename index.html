@@ -369,7 +369,7 @@ or    Découvertes en Chaldée 1884"></textarea>
         <div id="mergePlatformCols" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;"></div>
       </div>
 
-      <button class="generate" id="mergeRunBtn" onclick="runMerge()" disabled style="margin-top:12px;">Merge</button>
+      <button class="generate" id="mergeRunBtn" onclick="runMerge()" style="margin-top:12px;">Merge</button>
       <div class="error-msg" id="mergeErrorMsg"></div>
 
       <div class="batch-results-wrap" id="mergeResultsWrap" style="display:none;">
@@ -1272,7 +1272,7 @@ function handleMergeFile1(file) {
       </label>`).join('');
 
     // Auto-check columns that look like platform names
-    const platformKeywords = ['interench','liveauction','ebay','invaluable','barneby','abebook','biblio','rarebookhub','lot-tissimo','catawiki','leboncoin'];
+    const platformKeywords = ['interench','liveauction','live auction','ebay','invaluable','barneby','abebook','biblio','rarebookhub','lot-tissimo','catawiki','leboncoin','lot tissimo'];
     wrap.querySelectorAll('input[type=checkbox]').forEach(cb => {
       const h = mergeOriginalHeaders[parseInt(cb.value)] || '';
       if (platformKeywords.some(k => h.toLowerCase().includes(k))) cb.checked = true;
@@ -1324,6 +1324,7 @@ function checkMergeReady() {
 }
 
 function runMerge() {
+  alert('runMerge called — generated rows: ' + mergeGeneratedRows.length + ', original rows: ' + mergeOriginalRows.length);
   hideMergeError();
   try {
     if (!mergeGeneratedRows.length) { showMergeError('XLSX not loaded — please upload the generated search terms file first.'); return; }
