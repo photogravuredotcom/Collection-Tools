@@ -272,6 +272,7 @@
   <div class="mode-tabs">
     <div class="mode-tab active" id="tabSingle" onclick="switchMode('single')">Single Title</div>
     <div class="mode-tab" id="tabBatch" onclick="switchMode('batch')">Batch — CSV Upload</div>
+    <div class="mode-tab" id="tabMerge" onclick="switchMode('merge')">Merge Spreadsheets</div>
   </div>
 
   <div class="input-panel">
@@ -328,6 +329,46 @@ or    Découvertes en Chaldée 1884"></textarea>
           </table>
         </div>
         <button class="batch-download-btn" onclick="downloadXLSX()">&#8595; Download XLSX</button>
+      </div>
+    </div>
+
+    </div>
+
+    <!-- MERGE MODE -->
+    <div class="mode-pane" id="paneMerge">
+      <label class="panel-label">Generated Search Terms — Base File</label>
+      <p class="hint" style="margin-bottom:10px;">The XLSX downloaded from the Batch tab. This is the base — all its rows and columns are kept.</p>
+      <div class="batch-drop" id="mergeDrop2" onclick="document.getElementById('mergeFileInput2').click()">
+        <strong>Click to choose or drag &amp; drop</strong>
+        <p>Generated search terms — XLSX</p>
+      </div>
+      <input type="file" id="mergeFileInput2" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none;" onchange="handleMergeFile2(this.files[0])">
+      <div class="batch-file-info" id="mergeFileInfo2"></div>
+
+      <label class="panel-label" style="margin-top:16px;">Your Original Google Sheet — Source of Platform Columns</label>
+      <p class="hint" style="margin-bottom:10px;">Export as CSV (File → Download → CSV). The platform columns with X markers will be pulled from here.</p>
+      <div class="batch-drop" id="mergeDrop1" onclick="document.getElementById('mergeFileInput1').click()">
+        <strong>Click to choose or drag &amp; drop</strong>
+        <p>Your original spreadsheet — CSV</p>
+      </div>
+      <input type="file" id="mergeFileInput1" accept=".csv,text/csv" style="display:none;" onchange="handleMergeFile1(this.files[0])">
+      <div class="batch-file-info" id="mergeFileInfo1"></div>
+
+      <div id="mergeColPickerWrap" style="display:none;">
+        <label class="panel-label" style="margin-top:16px;">Which column in your CSV contains the title?</label>
+        <select id="mergeTitleCol" style="width:100%;background:var(--parchment);border:1px solid var(--warm-mid);padding:9px 12px;font-family:'EB Garamond',serif;font-size:1rem;color:var(--ink);margin-top:4px;outline:none;"></select>
+
+        <label class="panel-label" style="margin-top:14px;">Which columns contain the platform X markers?</label>
+        <p class="hint" style="margin-bottom:8px;">Check all the platform columns you want to carry across.</p>
+        <div id="mergePlatformCols" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;"></div>
+      </div>
+
+      <button class="generate" id="mergeRunBtn" onclick="runMerge()" disabled style="margin-top:12px;">Merge</button>
+      <div class="error-msg" id="mergeErrorMsg"></div>
+
+      <div class="batch-results-wrap" id="mergeResultsWrap" style="display:none;">
+        <div style="font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--gold);margin-bottom:8px;" id="mergeResultsLabel"></div>
+        <button class="batch-download-btn" onclick="downloadMergedXLSX()">&#8595; Download Merged XLSX</button>
       </div>
     </div>
 
@@ -896,10 +937,10 @@ let batchRows = [];
 let batchResults = [];
 
 function switchMode(mode) {
-  document.getElementById('tabSingle').classList.toggle('active', mode === 'single');
-  document.getElementById('tabBatch').classList.toggle('active', mode === 'batch');
-  document.getElementById('paneSingle').classList.toggle('active', mode === 'single');
-  document.getElementById('paneBatch').classList.toggle('active', mode === 'batch');
+  ['single','batch','merge'].forEach(m => {
+    document.getElementById('tab' + m.charAt(0).toUpperCase() + m.slice(1)).classList.toggle('active', m === mode);
+    document.getElementById('pane' + m.charAt(0).toUpperCase() + m.slice(1)).classList.toggle('active', m === mode);
+  });
   document.getElementById('results').classList.remove('visible');
 }
 
@@ -1159,6 +1200,198 @@ async function downloadXLSX() {
 function showBatchError(msg) { const el = document.getElementById('batchErrorMsg'); el.textContent = msg; el.classList.add('visible'); }
 function hideBatchError() { document.getElementById('batchErrorMsg').classList.remove('visible'); }
 // ── END BATCH MODE ────────────────────────────────────────────
+
+// ── MERGE MODE ────────────────────────────────────────────────
+let mergeOriginalRows = [];
+let mergeOriginalHeaders = [];
+let mergeGeneratedRows = [];   // rows from XLSX base
+let mergeGeneratedHeaders = [];
+let mergedOutput = [];
+
+function normTitle(s) {
+  return String(s || '').toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function fuzzyScore(a, b) {
+  const wa = new Set(normTitle(a).split(' ').filter(w => w.length > 2));
+  const wb = new Set(normTitle(b).split(' ').filter(w => w.length > 2));
+  if (!wa.size || !wb.size) return 0;
+  let inter = 0;
+  wa.forEach(w => { if (wb.has(w)) inter++; });
+  return inter / (wa.size + wb.size - inter);
+}
+
+// File 1 = original CSV (source of platform X columns)
+function handleMergeFile1(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const allRows = parseCSV(e.target.result);
+    if (!allRows.length) { showMergeError('Could not read any rows.'); return; }
+    mergeOriginalHeaders = allRows[0];
+    mergeOriginalRows = allRows.slice(1).filter(r => r.some(c => c.trim()));
+
+    // Title column selector
+    const sel = document.getElementById('mergeTitleCol');
+    sel.innerHTML = mergeOriginalHeaders.map((h, i) =>
+      `<option value="${i}">${h || 'Column ' + (i+1)}</option>`
+    ).join('');
+
+    // Platform column checkboxes
+    const wrap = document.getElementById('mergePlatformCols');
+    wrap.innerHTML = mergeOriginalHeaders.map((h, i) => `
+      <label style="display:inline-flex;align-items:center;gap:5px;background:var(--parchment);border:1px solid var(--aged);padding:4px 10px;cursor:pointer;font-family:'DM Mono',monospace;font-size:0.72rem;">
+        <input type="checkbox" value="${i}" style="cursor:pointer;"> ${h || 'Col '+(i+1)}
+      </label>`).join('');
+
+    // Auto-check columns that look like platform names
+    const platformKeywords = ['interench','liveauction','ebay','invaluable','barneby','abebook','biblio','rarebookhub','lot-tissimo','catawiki','leboncoin'];
+    wrap.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      const h = mergeOriginalHeaders[parseInt(cb.value)] || '';
+      if (platformKeywords.some(k => h.toLowerCase().includes(k))) cb.checked = true;
+    });
+
+    document.getElementById('mergeColPickerWrap').style.display = 'block';
+    const info = document.getElementById('mergeFileInfo1');
+    info.textContent = file.name + ' — ' + mergeOriginalRows.length + ' rows, ' + mergeOriginalHeaders.length + ' columns';
+    info.style.display = 'block';
+    checkMergeReady();
+  };
+  reader.readAsText(file);
+}
+
+// File 2 = generated XLSX (base)
+async function handleMergeFile2(file) {
+  if (!file) return;
+  try {
+    const buffer = await file.arrayBuffer();
+    const wb2 = new ExcelJS.Workbook();
+    await wb2.xlsx.load(buffer);
+    const ws2 = wb2.worksheets[0];
+    mergeGeneratedHeaders = [];
+    mergeGeneratedRows = [];
+    ws2.eachRow((row, rowNum) => {
+      const vals = [];
+      row.eachCell({ includeEmpty: true }, cell => vals.push(String(cell.value || '')));
+      if (rowNum === 1) { mergeGeneratedHeaders = vals; }
+      else { mergeGeneratedRows.push(vals); }
+    });
+    const info = document.getElementById('mergeFileInfo2');
+    info.textContent = file.name + ' — ' + mergeGeneratedRows.length + ' rows loaded';
+    info.style.display = 'block';
+    checkMergeReady();
+  } catch(e) { showMergeError('Could not read XLSX: ' + e.message); }
+}
+
+// Drag and drop
+['mergeDrop1','mergeDrop2'].forEach((id, idx) => {
+  const el = document.getElementById(id);
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('dragover'); });
+  el.addEventListener('dragleave', () => el.classList.remove('dragover'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f) idx === 0 ? handleMergeFile1(f) : handleMergeFile2(f);
+  });
+});
+
+function checkMergeReady() {
+  document.getElementById('mergeRunBtn').disabled = !(mergeOriginalRows.length > 0 && mergeGeneratedRows.length > 0);
+}
+
+function runMerge() {
+  hideMergeError();
+  const titleColIdx = parseInt(document.getElementById('mergeTitleCol').value);
+  if (isNaN(titleColIdx)) { showMergeError('Please select the title column.'); return; }
+
+  // Which platform columns were checked
+  const checkedCols = Array.from(document.querySelectorAll('#mergePlatformCols input:checked'))
+    .map(cb => parseInt(cb.value));
+  if (!checkedCols.length) { showMergeError('Please check at least one platform column.'); return; }
+
+  const platformHeaders = checkedCols.map(i => mergeOriginalHeaders[i]);
+  const MATCH_THRESHOLD = 0.3;
+
+  // For each XLSX base row, find best matching CSV row and pull platform values
+  mergedOutput = mergeGeneratedRows.map(xlsxRow => {
+    // XLSX citation is in column 1 (index 0)
+    const xlsxTitle = xlsxRow[0] || '';
+    let bestScore = 0, bestIdx = -1;
+    mergeOriginalRows.forEach((csvRow, i) => {
+      const score = fuzzyScore(xlsxTitle, csvRow[titleColIdx]);
+      if (score > bestScore) { bestScore = score; bestIdx = i; }
+    });
+    const platformVals = checkedCols.map(ci =>
+      (bestScore >= MATCH_THRESHOLD && bestIdx >= 0) ? (mergeOriginalRows[bestIdx][ci] || '') : ''
+    );
+    return { xlsxRow, platformVals, matched: bestScore >= MATCH_THRESHOLD };
+  });
+
+  const matched = mergedOutput.filter(r => r.matched).length;
+  const unmatched = mergedOutput.length - matched;
+  document.getElementById('mergeResultsLabel').textContent =
+    matched + ' rows matched · ' + unmatched + ' unmatched (platform columns blank) · ' +
+    platformHeaders.length + ' platform columns added';
+  document.getElementById('mergeResultsWrap').style.display = 'block';
+
+  // Store for download
+  mergedOutput._platformHeaders = platformHeaders;
+  mergedOutput._xlsxHeaders = mergeGeneratedHeaders;
+}
+
+async function downloadMergedXLSX() {
+  const platformHeaders = mergedOutput._platformHeaders || [];
+  const xlsxHeaders = mergedOutput._xlsxHeaders || [];
+  const allHeaders = [...xlsxHeaders, ...platformHeaders];
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Merged');
+
+  ws.columns = allHeaders.map((h, i) => ({
+    header: h, key: 'col' + i,
+    width: i < xlsxHeaders.length
+      ? (i === 0 ? 50 : i === 1 || i === 2 ? 30 : 16)
+      : 18
+  }));
+
+  // Bold styled header row
+  ws.getRow(1).eachCell(cell => {
+    cell.font = { name: 'Helvetica Neue', size: 14, bold: true, color: { argb: 'FFF5F0E8' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A1410' } };
+    cell.alignment = { vertical: 'middle' };
+  });
+  ws.getRow(1).height = 28;
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+  mergedOutput.forEach(item => {
+    const vals = [...item.xlsxRow, ...item.platformVals];
+    const dataRow = ws.addRow(vals);
+    // Highlight X cells in platform columns
+    item.platformVals.forEach((val, pi) => {
+      if (val && val.trim().toLowerCase() === 'x') {
+        const cell = dataRow.getCell(xlsxHeaders.length + pi + 1);
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F4E8' } };
+        cell.font = { bold: true, color: { argb: 'FF2a6a2a' } };
+      }
+    });
+  });
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'merged-' + new Date().toISOString().slice(0, 10) + '.xlsx';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function showMergeError(msg) { const el = document.getElementById('mergeErrorMsg'); el.textContent = msg; el.classList.add('visible'); }
+function hideMergeError() { document.getElementById('mergeErrorMsg').classList.remove('visible'); }
+// ── END MERGE MODE ────────────────────────────────────────────
 function hideError() { document.getElementById('errorMsg').classList.remove('visible'); }
 function esc(str) { return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
