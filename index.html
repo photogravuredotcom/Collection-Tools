@@ -398,11 +398,11 @@ JOURNAL ARTICLE DETECTION:
 - JOURNAL NAME CONSTRUCTION — follow in order:
   1. Take all words from the journal name. Strip articles and prepositions (der, die, das, des, de, du, des, le, la, les, of, the, und, and, et). Strip these generic journal-type words: Journal, Bulletin, Proceedings, Transactions, Review, Annals, Gazette, Magazine, Report, Zeitschrift, Revue, Memoires, Comptes, Jahrbuch, Annales, Archives, Berichte, Mitteilungen, Bericht.
   2. From the remaining words, pick the 1-2 most distinctive (longest, most specific, least common). Proper nouns and institution names are preferred over adjectives. If only one word remains after stripping, use it — do not discard the last distinctive word.
-  3. VOLUME NUMBER: Extract the volume number from whatever format it appears in — "vol. 12", "Bd. 3", "II. Jahrgang", "Jahrgang II", "tome 5", "t. 5", "Band 3", "Nro. 2", "Nr. 4", "no. 6". Roman numerals should be converted to arabic (II → 2, III → 3, etc.). Use the Jahrgang/Band/tome number as the volume. Nro./Nr./no. is the issue number within the volume — include it only if no volume number is present.
+  3. VOLUME NUMBER: Extract the volume number from whatever format it appears in — "vol. 12", "Bd. 3", "II. Jahrgang", "Jahrgang II", "tome 5", "t. 5", "Band 3", "Nro. 2", "Nr. 4", "no. 6". Use the Jahrgang/Band/tome number as the volume. Nro./Nr./no. is the issue number within the volume — include it only if no volume number is present. PRESERVE roman numerals exactly as they appear on the title page — do NOT convert to arabic. A bookseller cataloguing from the title page will type "II" not "2". The arabic equivalent will be offered as a Deep Search variant. Example: "II. Jahrgang" → use "II" in the searchTerm, not "2".
   4. Add the year.
   5. Strip all diacritics from the result.
   - Example 1: "Zeitschrift fur Ethnologie vol. 12 1880" → searchTerm: "Ethnologie 12 1880"
-  - Example 2: "Jahrbuch der Kaiserlich Koniglichen Geologischen Reichsanstalt, II. Jahrgang, Nro. 2, 1851" → strip Jahrbuch, der, Kaiserlich, Koniglichen, Geologischen → remaining: Reichsanstalt → volume: II = 2 → searchTerm: "Reichsanstalt 2 1851"
+  - Example 2: "Jahrbuch der Kaiserlich Koniglichen Geologischen Reichsanstalt, II. Jahrgang, Nro. 2, 1851" → strip Jahrbuch, der, Kaiserlich, Koniglichen, Geologischen → remaining: Reichsanstalt → volume: II (preserved as roman) → searchTerm: "Reichsanstalt II 1851"
 
 SEARCH TERM CONSTRUCTION RULES — follow this sequence until the result is tight:
 
@@ -661,7 +661,7 @@ TITLE VARIANT RULES:
 - Only include variants you are genuinely confident exist or are plausible for this work and era.
 - ALL diacritics stripped — plain ASCII.
 - Do not include the primary search term itself as a variant.
-- Empty array if no meaningful variants exist.
+- If the input is a journal article and the primary search term contains a roman numeral volume number, always include an arabic numeral variant as a title variant — e.g. if primary term uses "II", add a variant with "2" instead. Rationale: "Arabic numeral form — some booksellers normalise volume numbers when cataloguing."
 
 No apostrophes in any string value.`;
 
