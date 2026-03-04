@@ -247,11 +247,7 @@
 
 <main>
   <div class="input-panel">
-    <label class="panel-label">API Key</label>
-    <input type="password" id="apiKey" placeholder="Paste your Anthropic API key (sk-ant-…)" />
-    <p class="hint">Saved in your browser automatically.</p>
-
-    <label class="panel-label" style="margin-top:0;">Citation or Title</label>
+    <label class="panel-label">Citation or Title</label>
     <textarea id="citation" rows="4" placeholder="Paste anything — MLA citation, spreadsheet row, or just a title and year.
 
 e.g.  Sarzec, Ernest de. Découvertes en Chaldée. Leroux, 1884.
@@ -261,6 +257,12 @@ or    Découvertes en Chaldée 1884"></textarea>
 
     <button class="generate" id="generateBtn" onclick="generateTerms()">Generate Search Terms</button>
     <div class="error-msg" id="errorMsg"></div>
+
+    <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--aged);">
+      <label class="panel-label">API Key</label>
+      <input type="password" id="apiKey" placeholder="Paste your Anthropic API key (sk-ant-…)" />
+      <p class="hint">Saved in your browser automatically.</p>
+    </div>
   </div>
 
   <div class="spinner" id="spinner">Consulting the archive…</div>
@@ -290,14 +292,36 @@ or    Découvertes en Chaldée 1884"></textarea>
       <p id="journalText">Input detected as a journal article. Search term targets the journal volume, not the article title.</p>
     </div>
 
-    <!-- SEARCH TERM — hero position -->
-    <div class="term-hero">
+    <!-- SEARCH TERM — viaLibri / AbeBooks / Biblio (diacritics intact) -->
+    <div class="term-hero" style="margin-bottom:4px;">
       <div class="term-hero-inner">
-        <div class="term-hero-label">Search Term — use in Keyword field on all platforms</div>
+        <div class="term-hero-label">viaLibri · AbeBooks · Biblio — diacritics intact</div>
+        <div class="term-hero-value" id="searchTermAccented"></div>
+        <div class="term-hero-note" id="searchNoteAccented"></div>
+      </div>
+      <button class="copy-btn" onclick="copyField('searchTermAccented', this)">Copy</button>
+    </div>
+
+    <!-- SEARCH TERM — all other platforms (ASCII stripped) -->
+    <div class="term-hero" style="background: #2a2420; margin-bottom:14px;">
+      <div class="term-hero-inner">
+        <div class="term-hero-label">Invaluable · LiveAuctioneers · Barnebys · Interencheres · Lot-Tissimo — diacritics stripped</div>
         <div class="term-hero-value" id="searchTerm"></div>
         <div class="term-hero-note" id="searchNote"></div>
       </div>
       <button class="copy-btn" onclick="copyField('searchTerm', this)">Copy</button>
+    </div>
+
+    <!-- Year field note -->
+    <div class="author-pill" id="yearPill" style="display:none; background:#f5f0e8;">
+      <span class="author-pill-label">Date field</span>
+      <span class="author-pill-value" id="yearField"></span>
+      <button class="copy-btn" style="margin-left:4px;" onclick="copyField('yearField', this)">Copy</button>
+    </div>
+
+    <!-- viaLibri coverage note -->
+    <div style="font-family:'EB Garamond',serif;font-style:italic;font-size:0.82rem;color:var(--warm-mid);margin-bottom:14px;padding-left:2px;">
+      &#9432;&nbsp; viaLibri covers AbeBooks, Biblio &amp; Catawiki — no need to search those separately.
     </div>
 
     <!-- Author field for viaLibri -->
@@ -353,7 +377,7 @@ async function generateTerms() {
   const apiKey = document.getElementById('apiKey').value.trim();
 
   if (!citation) { showError('Please paste a citation or title before generating.'); return; }
-  if (!apiKey) { showError('Please enter your Anthropic API key at the top.'); return; }
+  if (!apiKey) { showError('Please enter your Anthropic API key at the bottom of the input panel.'); return; }
 
   hideError();
   document.getElementById('generateBtn').disabled = true;
@@ -378,10 +402,12 @@ Return ONLY valid JSON. No markdown fences, no preamble, no text after. All stri
   "validationFlags": [
     { "field": "title or author or date or publisher", "issue": "description", "suggestion": "corrected form" }
   ],
-  "searchTerm": "The optimized UNIVERSAL search string with ALL diacritics stripped. See construction rules below.",
+  "searchTerm": "The optimized search string with ALL diacritics stripped to plain ASCII — for Invaluable, LiveAuctioneers, Barnebys, Interencheres, Lot-Tissimo. See construction rules below.",
+  "searchTermAccented": "The same optimized search string but with diacritics PRESERVED exactly as they appear in the source — for viaLibri, AbeBooks, and Biblio, which have sophisticated diacritic handling. Use the correct accented forms. Do not strip anything.",
   "searchNote": "One sentence explaining what rule was applied and why these terms were chosen.",
+  "publicationYear": "Four-digit year only if confidently known. Empty string if uncertain.",
   "authorSurname": "Single primary author surname only, no particles (de, von, van, du, le, la), no initials, no punctuation. Empty string if multiple authors, editors, corporate/institutional, unclear, or if stripping the surname diacritics creates a common word or causes ambiguity.",
-  "diacriticStrategy": "Explain the diacritic decision made for this input. If the title or author contained accented characters, describe: (1) whether the stripped form is safe to use universally; (2) whether any stripped word collides with a common unrelated word (word collision risk); (3) whether the author surname was affected and why it was included or omitted. If no diacritics were present, return an empty string.",
+  "diacriticStrategy": "Explain the diacritic decision made for this input. If accented characters are present: (1) confirm the accented form used in searchTermAccented; (2) describe any word collision risk in the stripped searchTerm; (3) note whether the author surname was affected. If no diacritics were present, return an empty string.",
   "exclusionTerms": [
     { "term": "word without brackets", "reason": "why exclude" }
   ],
@@ -404,6 +430,11 @@ JOURNAL ARTICLE DETECTION:
   - Example 1: "Zeitschrift fur Ethnologie vol. 12 1880" → searchTerm: "Ethnologie 12 1880"
   - Example 2: "Jahrbuch der Kaiserlich Koniglichen Geologischen Reichsanstalt, II. Jahrgang, Nro. 2, 1851" → strip Jahrbuch, der, Kaiserlich, Koniglichen, Geologischen → remaining: Reichsanstalt → volume: II (preserved as roman) → searchTerm: "Reichsanstalt II 1851"
 
+YEAR RULES:
+- Do NOT include the year in searchTerm or searchTermAccented. The year belongs in the platform date fields, not keywords. viaLibri confirmed year-in-keyword is outdated advice.
+- Set publicationYear to the four-digit year if confidently known from the input. Empty string if uncertain, a range, or marked with ??.
+- Exception: journal article mode — year stays in the searchTerm because journal volume searches need it as a disambiguator (date fields may not apply to journal issues).
+
 SEARCH TERM CONSTRUCTION RULES — follow this sequence until the result is tight:
 
 STEP 1 — START WITH:
@@ -412,13 +443,11 @@ STEP 1 — START WITH:
 - This gives you two terms. Evaluate whether this is already tight enough.
 
 STEP 2 — IF STILL LOOSE, ADD ONE MORE:
-- Add the year of publication, OR
 - Add a second distinctive title word
-- Prefer year when the title word combination is already reasonably specific
-- Prefer second title word when the author is omitted or unknown
+- Do NOT add year — year goes in the date field, not keywords
 
 STEP 3 — IF STILL LOOSE, ADD ONE MORE:
-- Add whatever was not added in Step 2 (year or second title word)
+- Add a third distinctive title word if available
 
 STEP 4 — QUOTES AS LAST RESORT ONLY:
 - Only use quotes if ALL title words are common and only distinctive in exact combination
@@ -432,15 +461,15 @@ HARD RULES:
 - Long main titles (more than 6 words): use only the first 1-2 distinctive words from the main title
 - Never use: Album, Atlas, Voyage, Histoire, Journal, Photography, Art, Illustrated, Collection, Works, New, Studies, Notes, Survey, Introduction, Guide, Complete, Selected
 - Author surname: no particles (de, von, van, du, le, la), no initials, no punctuation
-- Multiple/unclear authors: omit author, rely on title words and year
-- Date uncertain (marked ??, range, or unknown): omit year
+- Multiple/unclear authors: omit author, rely on title words
+- Date uncertain (marked ??, range, or unknown): set publicationYear to empty string
 - Detect language automatically — do not ask user
 
 DIACRITIC RULES:
-- ALL diacritics must be stripped from the searchTerm — the output must be plain ASCII. Strip accents, cedillas, umlauts, tildes, and all other diacritical marks universally. Most auction and book platforms do not normalize diacritics and a stripped form matches both accented and unaccented listings.
-- WORD COLLISION CHECK: After stripping, check whether any resulting word becomes a common English, French, German, Spanish, or Italian word with a different meaning (e.g. a stripped proper noun that becomes "de", "or", "la", "mer", "cote", "ou"). If collision risk is high, compensate by adding the year or an additional distinctive title word to the searchTerm, and document this in diacriticStrategy.
-- AUTHOR SURNAME DIACRITIC RISK: If stripping diacritics from the author surname produces a common word or an ambiguous result that would pollute results, omit the surname from searchTerm entirely and set authorSurname to empty string. Document this in diacriticStrategy.
-- Document all diacritic decisions — safe strip, collision risk, or surname omission — in the diacriticStrategy field. If no diacritics were present, return an empty string for diacriticStrategy.
+- searchTermAccented: preserve all diacritics exactly as they appear in the source title/author. viaLibri, AbeBooks, and Biblio have sophisticated internal diacritic handling and will match accented and unaccented forms. Use correct accented spelling.
+- searchTerm: strip ALL diacritics to plain ASCII for platforms without diacritic normalization (Invaluable, LiveAuctioneers, Barnebys, Interencheres, Lot-Tissimo). Note: ö and similar may map to "o" or "oe" depending on platform — stripped ASCII is the safest universal form for these.
+- WORD COLLISION CHECK (applies to searchTerm only): After stripping, check whether any resulting word becomes a common English, French, German, Spanish, or Italian word with a different meaning. If collision risk is high, compensate by adding an additional distinctive title word to searchTerm (not the year — see year rules below), and document this in diacriticStrategy.
+- AUTHOR SURNAME DIACRITIC RISK: If stripping diacritics from the author surname produces a common word or ambiguous result, omit the surname from searchTerm. Document in diacriticStrategy.
 
 VALIDATION:
 - Cross-check against bibliographic knowledge of 19th-20th century photomechanical books
@@ -532,9 +561,19 @@ function renderResults(d) {
     wb.classList.add('visible');
   } else { wb.classList.remove('visible'); }
 
-  // Search term — hero
+  // Search terms — two heroes
+  document.getElementById('searchTermAccented').textContent = d.searchTermAccented || d.searchTerm || '';
   document.getElementById('searchTerm').textContent = d.searchTerm || '';
   document.getElementById('searchNote').textContent = d.searchNote || '';
+  document.getElementById('searchNoteAccented').textContent = '';
+
+  // Year field pill
+  const yearPill = document.getElementById('yearPill');
+  const yearField = document.getElementById('yearField');
+  if (d.publicationYear && d.publicationYear.trim()) {
+    yearField.textContent = d.publicationYear;
+    yearPill.style.display = 'inline-flex';
+  } else { yearPill.style.display = 'none'; }
 
   // Author pill — only show if there is a single author
   const authorPill = document.getElementById('authorPill');
@@ -755,11 +794,15 @@ function copyText(text, btn) {
 }
 
 function copyAll() {
+  const termAccented = document.getElementById('searchTermAccented').textContent;
   const term = document.getElementById('searchTerm').textContent;
   const author = document.getElementById('authorField').textContent;
+  const year = document.getElementById('yearField').textContent;
   const excls = Array.from(document.querySelectorAll('.excl-tag')).map(el => '[' + el.querySelector('span:nth-child(2)').textContent + ']');
-  let out = 'SEARCH TERM: ' + term;
+  let out = 'viaLibri / AbeBooks / Biblio: ' + termAccented;
+  out += '\nOther platforms: ' + term;
   if (author) out += '\nAUTHOR FIELD (viaLibri): ' + author;
+  if (year) out += '\nDATE FIELD: ' + year;
   if (excls.length) out += '\nEXCLUSIONS: ' + excls.join(' ');
   navigator.clipboard.writeText(out).then(() => {
     const btn = document.querySelector('.copy-all-btn');
