@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Search Term Generator — Photogravure Collection</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1048,50 +1048,65 @@ function renderBatchResults() {
   wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function downloadXLSX() {
-  const headers = ['Original Citation', 'viaLibri / AbeBooks / Biblio', 'Other Platforms', 'Author Field', 'Date Field', 'Notes'];
-  const rows = [headers];
+async function downloadXLSX() {
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet('Search Terms');
 
+  // Define columns with widths
+  ws.columns = [
+    { header: 'Original Citation',          key: 'citation',   width: 55 },
+    { header: 'viaLibri / AbeBooks / Biblio', key: 'accented', width: 32 },
+    { header: 'Other Platforms',            key: 'other',      width: 28 },
+    { header: 'Author Field',               key: 'author',     width: 18 },
+    { header: 'Date Field',                 key: 'date',       width: 12 },
+    { header: 'Notes',                      key: 'notes',      width: 42 },
+  ];
+
+  // Style header row — 14pt bold Helvetica Neue
+  ws.getRow(1).eachCell(cell => {
+    cell.font = { name: 'Helvetica Neue', size: 14, bold: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A1410' } };
+    cell.font = { name: 'Helvetica Neue', size: 14, bold: true, color: { argb: 'FFF5F0E8' } };
+    cell.alignment = { vertical: 'middle' };
+  });
+  ws.getRow(1).height = 28;
+
+  // Freeze header row
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+  // Add data rows
   for (const row of batchResults) {
     if (row.error) {
-      rows.push([row.citation, 'ERROR: ' + row.error, '', '', '', '']);
+      ws.addRow({ citation: row.citation, accented: 'ERROR: ' + row.error, other: '', author: '', date: '', notes: '' });
     } else {
       const d = row.result;
       const accented = d.searchTermAccented || d.searchTerm || '';
       const stripped = d.searchTerm || '';
-      const otherPlatforms = stripped !== accented ? stripped : '';
       const notes = d.highFalsePositiveRisk ? (d.warningText || 'High false-positive risk') : '';
-      rows.push([row.citation, accented, otherPlatforms, d.authorSurname || '', d.publicationYear || '', notes]);
+      const dataRow = ws.addRow({
+        citation: row.citation,
+        accented: accented,
+        other: stripped !== accented ? stripped : '',
+        author: d.authorSurname || '',
+        date: d.publicationYear || '',
+        notes: notes
+      });
+      // Highlight notes cell if warning
+      if (notes) {
+        dataRow.getCell('notes').font = { color: { argb: 'FF8B3A1A' }, italic: true };
+      }
     }
   }
 
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-
-  // Bold headers
-  const headerRange = XLSX.utils.decode_range(ws['!ref']);
-  for (let c = headerRange.s.c; c <= headerRange.e.c; c++) {
-    const cellRef = XLSX.utils.encode_cell({ r: 0, c });
-    if (ws[cellRef]) {
-      ws[cellRef].s = { font: { bold: true } };
-    }
-  }
-
-  // Column widths
-  ws['!cols'] = [
-    { wch: 55 }, // Original Citation
-    { wch: 30 }, // viaLibri
-    { wch: 28 }, // Other Platforms
-    { wch: 16 }, // Author Field
-    { wch: 12 }, // Date Field
-    { wch: 40 }, // Notes
-  ];
-
-  // Freeze header row
-  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Search Terms');
-  XLSX.writeFile(wb, 'search-terms-' + new Date().toISOString().slice(0, 10) + '.xlsx');
+  // Download
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'search-terms-' + new Date().toISOString().slice(0, 10) + '.xlsx';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function showBatchError(msg) { const el = document.getElementById('batchErrorMsg'); el.textContent = msg; el.classList.add('visible'); }
