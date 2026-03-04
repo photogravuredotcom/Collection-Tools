@@ -314,12 +314,12 @@ or    Découvertes en Chaldée 1884"></textarea>
           <table id="batchTable">
             <thead>
               <tr>
-                <th>Original Citation</th>
-                <th>viaLibri / AbeBooks / Biblio</th>
-                <th>Other Platforms</th>
-                <th>Author Field</th>
-                <th>Date Field</th>
-                <th>Exclusions</th>
+                <th style="font-weight:700;">Original Citation</th>
+                <th style="font-weight:700;">viaLibri / AbeBooks / Biblio</th>
+                <th style="font-weight:700;">Other Platforms</th>
+                <th style="font-weight:700;">Author Field</th>
+                <th style="font-weight:700;">Date Field</th>
+                <th style="font-weight:700;">Notes</th>
               </tr>
             </thead>
             <tbody id="batchTableBody"></tbody>
@@ -1030,13 +1030,16 @@ function renderBatchResults() {
       tr.innerHTML = `<td>${esc(row.citation)}</td><td colspan="5">Error: ${esc(row.error)}</td>`;
     } else {
       const d = row.result;
-      const excls = (d.exclusionTerms || []).map(e => '[' + e.term + ']').join(' ');
+      const accented = d.searchTermAccented || d.searchTerm || '';
+      const stripped = d.searchTerm || '';
+      const otherPlatforms = stripped !== accented ? stripped : '';
+      const notes = d.highFalsePositiveRisk ? (d.warningText || 'High false-positive risk') : '';
       tr.innerHTML = `<td>${esc(row.citation)}</td>
-        <td>${esc(d.searchTermAccented || d.searchTerm || '')}</td>
-        <td>${esc(d.searchTerm || '')}</td>
+        <td>${esc(accented)}</td>
+        <td>${esc(otherPlatforms)}</td>
         <td>${esc(d.authorSurname || '')}</td>
         <td>${esc(d.publicationYear || '')}</td>
-        <td>${esc(excls)}</td>`;
+        <td style="${notes ? 'color:var(--rust);font-style:italic;' : ''}">${esc(notes)}</td>`;
     }
     tbody.appendChild(tr);
   }
@@ -1045,21 +1048,24 @@ function renderBatchResults() {
 }
 
 function downloadCSV() {
-  const headers = ['Original Citation', 'viaLibri/AbeBooks/Biblio', 'Other Platforms', 'Author Field', 'Date Field', 'Exclusions'];
+  const headers = ['Original Citation', 'viaLibri/AbeBooks/Biblio', 'Other Platforms', 'Author Field', 'Date Field', 'Notes'];
   const csvRows = [headers.map(csvEsc).join(',')];
   for (const row of batchResults) {
     if (row.error) {
       csvRows.push([csvEsc(row.citation), csvEsc('ERROR: ' + row.error), '', '', '', ''].join(','));
     } else {
       const d = row.result;
-      const excls = (d.exclusionTerms || []).map(e => '[' + e.term + ']').join(' ');
+      const accented = d.searchTermAccented || d.searchTerm || '';
+      const stripped = d.searchTerm || '';
+      const otherPlatforms = stripped !== accented ? stripped : '';
+      const notes = d.highFalsePositiveRisk ? (d.warningText || 'High false-positive risk') : '';
       csvRows.push([
         csvEsc(row.citation),
-        csvEsc(d.searchTermAccented || d.searchTerm || ''),
-        csvEsc(d.searchTerm || ''),
+        csvEsc(accented),
+        csvEsc(otherPlatforms),
         csvEsc(d.authorSurname || ''),
         csvEsc(d.publicationYear || ''),
-        csvEsc(excls)
+        csvEsc(notes)
       ].join(','));
     }
   }
