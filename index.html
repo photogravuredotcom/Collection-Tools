@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Search Term Generator — Photogravure Collection</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -299,6 +299,7 @@ or    Découvertes en Chaldée 1884"></textarea>
       <input type="file" id="batchFileInput" accept=".csv,text/csv" style="display:none;" onchange="handleBatchFile(this.files[0])">
       <div class="batch-file-info" id="batchFileInfo"></div>
       <button class="generate" id="batchRunBtn" onclick="runBatch()" disabled style="margin-top:4px;">Process All Titles</button>
+      <button class="generate" id="batchResumeBtn" onclick="resumeErrors()" style="display:none;margin-top:6px;background:var(--rust);">&#8635; Retry Failed Rows</button>
       <div class="error-msg" id="batchErrorMsg"></div>
 
       <!-- Progress -->
@@ -986,11 +987,58 @@ async function runBatch() {
   }
 
   progressBar.style.width = '100%';
-  progressLabel.textContent = 'Complete — ' + total + ' title' + (total !== 1 ? 's' : '') + ' processed';
+  const errors = batchResults.filter(r => r.error).length;
+  progressLabel.textContent = 'Complete — ' + batchResults.length + ' title' + (batchResults.length !== 1 ? 's' : '') + ' processed' + (errors ? ' · ' + errors + ' failed' : '');
   progressCurrent.textContent = '';
 
   renderBatchResults();
   document.getElementById('batchRunBtn').disabled = false;
+  document.getElementById('batchResumeBtn').style.display = errors ? 'block' : 'none';
+}
+
+async function resumeErrors() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { showBatchError('Please enter your Anthropic API key first.'); return; }
+
+  const failedIndices = batchResults.map((r, i) => r.error ? i : -1).filter(i => i >= 0);
+  if (!failedIndices.length) return;
+
+  document.getElementById('batchResumeBtn').disabled = true;
+  document.getElementById('batchRunBtn').disabled = true;
+
+  const progressWrap = document.getElementById('batchProgressWrap');
+  const progressBar = document.getElementById('batchProgressBar');
+  const progressLabel = document.getElementById('batchProgressLabel');
+  const progressCurrent = document.getElementById('batchProgressCurrent');
+  progressWrap.style.display = 'block';
+  progressBar.style.width = '0%';
+
+  for (let n = 0; n < failedIndices.length; n++) {
+    const idx = failedIndices[n];
+    const citation = batchResults[idx].citation;
+    progressLabel.textContent = 'Retrying ' + (n + 1) + ' of ' + failedIndices.length + ' failed rows…';
+    progressBar.style.width = Math.round((n / failedIndices.length) * 100) + '%';
+    progressCurrent.textContent = citation.length > 80 ? citation.slice(0, 80) + '…' : citation;
+
+    try {
+      const result = await callAPI(citation, apiKey);
+      batchResults[idx] = { citation, result, error: null };
+    } catch(e) {
+      batchResults[idx] = { citation, result: null, error: e.message };
+    }
+
+    if (n < failedIndices.length - 1) await new Promise(r => setTimeout(r, 300));
+  }
+
+  progressBar.style.width = '100%';
+  const stillFailed = batchResults.filter(r => r.error).length;
+  progressLabel.textContent = 'Retry complete' + (stillFailed ? ' · ' + stillFailed + ' still failed' : ' · all rows succeeded');
+  progressCurrent.textContent = '';
+
+  renderBatchResults();
+  document.getElementById('batchRunBtn').disabled = false;
+  document.getElementById('batchResumeBtn').disabled = false;
+  document.getElementById('batchResumeBtn').style.display = stillFailed ? 'block' : 'none';
 }
 
 async function callAPI(citation, apiKey) {
@@ -1022,7 +1070,7 @@ function renderBatchResults() {
   const wrap = document.getElementById('batchResultsWrap');
   const label = document.getElementById('batchResultsLabel');
   const errors = batchResults.filter(r => r.error).length;
-  label.textContent = batchResults.length + ' titles processed' + (errors ? ' — ' + errors + ' error' + (errors !== 1 ? 's' : '') : '');
+  label.textContent = batchResults.length + ' titles processed' + (errors ? ' — ' + errors + ' failed (use Retry button to reprocess)' : ' — all succeeded');
 
   for (const row of batchResults) {
     const tr = document.createElement('tr');
@@ -1064,9 +1112,8 @@ async function downloadXLSX() {
 
   // Style header row — 14pt bold Helvetica Neue
   ws.getRow(1).eachCell(cell => {
-    cell.font = { name: 'Helvetica Neue', size: 14, bold: true };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A1410' } };
     cell.font = { name: 'Helvetica Neue', size: 14, bold: true, color: { argb: 'FFF5F0E8' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A1410' } };
     cell.alignment = { vertical: 'middle' };
   });
   ws.getRow(1).height = 28;
