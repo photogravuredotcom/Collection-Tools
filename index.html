@@ -1215,7 +1215,25 @@ function normTitle(s) {
     .trim();
 }
 
+function extractTitle(fullCitation) {
+  // XLSX citations are typically "Surname, Firstname. Title. Publisher, Year."
+  // Strip the author (everything up to and including the first period + space)
+  const firstPeriod = fullCitation.indexOf('. ');
+  const withoutAuthor = firstPeriod >= 0 ? fullCitation.slice(firstPeriod + 2) : fullCitation;
+  // Also strip everything after the second period (publisher/date)
+  const secondPeriod = withoutAuthor.indexOf('. ');
+  return secondPeriod >= 0 ? withoutAuthor.slice(0, secondPeriod) : withoutAuthor;
+}
+
 function fuzzyScore(a, b) {
+  // Try matching both the raw strings and the extracted title portion
+  const score1 = wordOverlap(a, b);
+  const score2 = wordOverlap(extractTitle(a), b);
+  const score3 = wordOverlap(a, extractTitle(b));
+  return Math.max(score1, score2, score3);
+}
+
+function wordOverlap(a, b) {
   const wa = new Set(normTitle(a).split(' ').filter(w => w.length > 2));
   const wb = new Set(normTitle(b).split(' ').filter(w => w.length > 2));
   if (!wa.size || !wb.size) return 0;
