@@ -338,7 +338,10 @@ or    Découvertes en Chaldée 1884"></textarea>
     <div class="mode-pane" id="paneMerge">
       <label class="panel-label">Generated Search Terms — Base File</label>
       <p class="hint" style="margin-bottom:10px;">The XLSX downloaded from the Batch tab. This is the base — all its rows and columns are kept.</p>
-      <div class="batch-drop" id="mergeDrop2" onclick="document.getElementById('mergeFileInput2').click()">
+      <div class="batch-drop" id="mergeDrop2" onclick="document.getElementById('mergeFileInput2').click()"
+        ondragover="event.preventDefault();this.classList.add('dragover')"
+        ondragleave="this.classList.remove('dragover')"
+        ondrop="event.preventDefault();this.classList.remove('dragover');if(event.dataTransfer.files[0])handleMergeFile2(event.dataTransfer.files[0])">
         <strong>Click to choose or drag &amp; drop</strong>
         <p>Generated search terms — XLSX</p>
       </div>
@@ -347,7 +350,10 @@ or    Découvertes en Chaldée 1884"></textarea>
 
       <label class="panel-label" style="margin-top:16px;">Your Original Google Sheet — Source of Platform Columns</label>
       <p class="hint" style="margin-bottom:10px;">Export as CSV (File → Download → CSV). The platform columns with X markers will be pulled from here.</p>
-      <div class="batch-drop" id="mergeDrop1" onclick="document.getElementById('mergeFileInput1').click()">
+      <div class="batch-drop" id="mergeDrop1" onclick="document.getElementById('mergeFileInput1').click()"
+        ondragover="event.preventDefault();this.classList.add('dragover')"
+        ondragleave="this.classList.remove('dragover')"
+        ondrop="event.preventDefault();this.classList.remove('dragover');if(event.dataTransfer.files[0])handleMergeFile1(event.dataTransfer.files[0])">
         <strong>Click to choose or drag &amp; drop</strong>
         <p>Your original spreadsheet — CSV</p>
       </div>
@@ -1304,17 +1310,7 @@ async function handleMergeFile2(file) {
   } catch(e) { showMergeError('Could not read XLSX: ' + e.message); }
 }
 
-// Drag and drop
-['mergeDrop1','mergeDrop2'].forEach((id, idx) => {
-  const el = document.getElementById(id);
-  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('dragover'); });
-  el.addEventListener('dragleave', () => el.classList.remove('dragover'));
-  el.addEventListener('drop', e => {
-    e.preventDefault(); el.classList.remove('dragover');
-    const f = e.dataTransfer.files[0];
-    if (f) idx === 0 ? handleMergeFile1(f) : handleMergeFile2(f);
-  });
-});
+// Drag and drop — bound inline via ondragover/ondrop attributes to avoid timing issues
 
 function checkMergeReady() {
   document.getElementById('mergeRunBtn').disabled = !(mergeOriginalRows.length > 0 && mergeGeneratedRows.length > 0);
@@ -1322,7 +1318,8 @@ function checkMergeReady() {
 
 function runMerge() {
   hideMergeError();
-  const titleColIdx = parseInt(document.getElementById('mergeTitleCol').value);
+  try {
+    const titleColIdx = parseInt(document.getElementById('mergeTitleCol').value);
   if (isNaN(titleColIdx)) { showMergeError('Please select the title column.'); return; }
 
   const checkedCols = Array.from(document.querySelectorAll('#mergePlatformCols input:checked'))
@@ -1380,6 +1377,7 @@ function runMerge() {
     matchCount + ' rows matched · ' + noMatchCount + ' unmatched · ' +
     platformHeaders.length + ' platform columns added' + diagHtml;
   document.getElementById('mergeResultsWrap').style.display = 'block';
+  } catch(e) { showMergeError('Merge error: ' + e.message); }
 }
 
 async function downloadMergedXLSX() {
