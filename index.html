@@ -1299,7 +1299,14 @@ async function handleMergeFile2(file) {
     mergeGeneratedRows = [];
     ws2.eachRow((row, rowNum) => {
       const vals = [];
-      row.eachCell({ includeEmpty: true }, cell => vals.push(String(cell.value || '')));
+      row.eachCell({ includeEmpty: true }, cell => {
+        const v = cell.value;
+        // cell.value can be a rich text object, date, number, string, null
+        if (v === null || v === undefined) { vals.push(''); }
+        else if (typeof v === 'object' && v.richText) { vals.push(v.richText.map(r => r.text).join('')); }
+        else if (typeof v === 'object' && v.result !== undefined) { vals.push(String(v.result)); }
+        else { vals.push(String(v)); }
+      });
       if (rowNum === 1) { mergeGeneratedHeaders = vals; }
       else { mergeGeneratedRows.push(vals); }
     });
@@ -1319,6 +1326,8 @@ function checkMergeReady() {
 function runMerge() {
   hideMergeError();
   try {
+    if (!mergeGeneratedRows.length) { showMergeError('XLSX not loaded — please upload the generated search terms file first.'); return; }
+    if (!mergeOriginalRows.length) { showMergeError('CSV not loaded — please upload your original spreadsheet first.'); return; }
     const titleColIdx = parseInt(document.getElementById('mergeTitleCol').value);
   if (isNaN(titleColIdx)) { showMergeError('Please select the title column.'); return; }
 
@@ -1376,8 +1385,10 @@ function runMerge() {
   document.getElementById('mergeResultsLabel').innerHTML =
     matchCount + ' rows matched · ' + noMatchCount + ' unmatched · ' +
     platformHeaders.length + ' platform columns added' + diagHtml;
-  document.getElementById('mergeResultsWrap').style.display = 'block';
-  } catch(e) { showMergeError('Merge error: ' + e.message); }
+  const wrap = document.getElementById('mergeResultsWrap');
+  wrap.style.display = 'block';
+  wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch(e) { showMergeError('Merge error: ' + e.message); console.error(e); }
 }
 
 async function downloadMergedXLSX() {
