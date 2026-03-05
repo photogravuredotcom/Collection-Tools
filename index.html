@@ -321,7 +321,8 @@ or    Découvertes en Chaldée 1884"></textarea>
                 <th style="font-weight:700;">viaLibri / AbeBooks / Biblio</th>
                 <th style="font-weight:700;">Other Platforms</th>
                 <th style="font-weight:700;">Author Field</th>
-                <th style="font-weight:700;">Date Field</th>
+                <th style="font-weight:700;">Date From</th>
+                <th style="font-weight:700;">Date To</th>
                 <th style="font-weight:700;">Notes</th>
               </tr>
             </thead>
@@ -436,11 +437,18 @@ or    Découvertes en Chaldée 1884"></textarea>
       <button class="copy-btn" onclick="copyField('searchTerm', this)">Copy</button>
     </div>
 
-    <!-- Year field note -->
-    <div class="author-pill" id="yearPill" style="display:none; background:#f5f0e8;">
-      <span class="author-pill-label">Date field</span>
-      <span class="author-pill-value" id="yearField"></span>
-      <button class="copy-btn" style="margin-left:4px;" onclick="copyField('yearField', this)">Copy</button>
+    <!-- Year field pill(s) -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+      <div class="author-pill" id="yearPill" style="display:none; background:#f5f0e8;">
+        <span class="author-pill-label" id="yearPillLabel">Date field</span>
+        <span class="author-pill-value" id="yearField"></span>
+        <button class="copy-btn" style="margin-left:4px;" onclick="copyField('yearField', this)">Copy</button>
+      </div>
+      <div class="author-pill" id="yearEndPill" style="display:none; background:#f5f0e8;">
+        <span class="author-pill-label">Date to</span>
+        <span class="author-pill-value" id="yearEndField"></span>
+        <button class="copy-btn" style="margin-left:4px;" onclick="copyField('yearEndField', this)">Copy</button>
+      </div>
     </div>
 
     <!-- viaLibri coverage note -->
@@ -518,7 +526,8 @@ Return ONLY valid JSON. No markdown fences, no preamble, no text after. All stri
   "searchTerm": "The optimized search string with ALL diacritics stripped to plain ASCII — for Invaluable, LiveAuctioneers, Barnebys, Interencheres, Lot-Tissimo. See construction rules below.",
   "searchTermAccented": "The same optimized search string but with diacritics PRESERVED exactly as they appear in the source — for viaLibri, AbeBooks, and Biblio, which have sophisticated diacritic handling. Use the correct accented forms. Do not strip anything.",
   "searchNote": "One sentence explaining what rule was applied and why these terms were chosen.",
-  "publicationYear": "Four-digit year only if confidently known. Empty string if uncertain.",
+  "publicationYear": "Four-digit start year only if confidently known. Empty string if uncertain.",
+  "publicationYearEnd": "Four-digit end year for journals or multi-volume works that span a range of years (e.g. a journal volume published 1851-1860, or a multi-volume set issued over several years). Empty string for single-year publications or if uncertain.",
   "authorSurname": "Single primary author surname only, no particles (de, von, van, du, le, la), no initials, no punctuation. Empty string if multiple authors, editors, corporate/institutional, unclear, or if stripping the surname diacritics creates a common word or causes ambiguity.",
   "diacriticStrategy": "Explain the diacritic decision made for this input. If accented characters are present: (1) confirm the accented form used in searchTermAccented; (2) describe any word collision risk in the stripped searchTerm; (3) note whether the author surname was affected. If no diacritics were present, return an empty string.",
   "exclusionTerms": [
@@ -545,7 +554,8 @@ JOURNAL ARTICLE DETECTION:
 
 YEAR RULES:
 - Do NOT include the year in searchTerm or searchTermAccented. The year belongs in the platform date fields, not keywords. viaLibri confirmed year-in-keyword is outdated advice.
-- Set publicationYear to the four-digit year if confidently known from the input. Empty string if uncertain, a range, or marked with ??.
+- Set publicationYear to the four-digit START year if confidently known from the input. Empty string if uncertain or marked with ??.
+- Set publicationYearEnd to the four-digit END year ONLY for: (1) journals or periodicals that ran across multiple years, (2) multi-volume works issued over a span of years. For a single-volume book with one publication year, publicationYearEnd must be empty string. viaLibri has separate Begin Date and End Date fields — use both when a range applies.
 - Exception: journal article mode — year stays in the searchTerm because journal volume searches need it as a disambiguator (date fields may not apply to journal issues).
 
 SEARCH TERM CONSTRUCTION RULES — follow this sequence until the result is tight:
@@ -694,13 +704,22 @@ function renderResults(d) {
   document.getElementById('searchNote').textContent = d.searchNote || '';
   document.getElementById('searchNoteAccented').textContent = '';
 
-  // Year field pill
+  // Year field pill(s)
   const yearPill = document.getElementById('yearPill');
   const yearField = document.getElementById('yearField');
+  const yearEndPill = document.getElementById('yearEndPill');
+  const yearEndField = document.getElementById('yearEndField');
+  const yearPillLabel = document.getElementById('yearPillLabel');
+  const hasEnd = d.publicationYearEnd && d.publicationYearEnd.trim();
   if (d.publicationYear && d.publicationYear.trim()) {
     yearField.textContent = d.publicationYear;
+    yearPillLabel.textContent = hasEnd ? 'Date from' : 'Date field';
     yearPill.style.display = 'inline-flex';
   } else { yearPill.style.display = 'none'; }
+  if (hasEnd) {
+    yearEndField.textContent = d.publicationYearEnd;
+    yearEndPill.style.display = 'inline-flex';
+  } else { yearEndPill.style.display = 'none'; }
 
   // Author pill — only show if there is a single author
   const authorPill = document.getElementById('authorPill');
@@ -1136,6 +1155,7 @@ function renderBatchResults() {
         <td>${esc(otherPlatforms)}</td>
         <td>${esc(d.authorSurname || '')}</td>
         <td>${esc(d.publicationYear || '')}</td>
+        <td>${esc(d.publicationYearEnd || '')}</td>
         <td style="${notes ? 'color:var(--rust);font-style:italic;' : ''}">${esc(notes)}</td>`;
     }
     tbody.appendChild(tr);
@@ -1150,12 +1170,13 @@ async function downloadXLSX() {
 
   // Define columns with widths
   ws.columns = [
-    { header: 'Original Citation',          key: 'citation',   width: 55 },
-    { header: 'viaLibri / AbeBooks / Biblio', key: 'accented', width: 32 },
-    { header: 'Other Platforms',            key: 'other',      width: 28 },
-    { header: 'Author Field',               key: 'author',     width: 18 },
-    { header: 'Date Field',                 key: 'date',       width: 12 },
-    { header: 'Notes',                      key: 'notes',      width: 42 },
+    { header: 'Original Citation',            key: 'citation',  width: 55 },
+    { header: 'viaLibri / AbeBooks / Biblio', key: 'accented',  width: 32 },
+    { header: 'Other Platforms',              key: 'other',     width: 28 },
+    { header: 'Author Field',                 key: 'author',    width: 18 },
+    { header: 'Date From',                    key: 'dateFrom',  width: 12 },
+    { header: 'Date To',                      key: 'dateTo',    width: 12 },
+    { header: 'Notes',                        key: 'notes',     width: 42 },
   ];
 
   // Style header row — 14pt bold Helvetica Neue
@@ -1183,7 +1204,8 @@ async function downloadXLSX() {
         accented: accented,
         other: stripped !== accented ? stripped : '',
         author: d.authorSurname || '',
-        date: d.publicationYear || '',
+        dateFrom: d.publicationYear || '',
+        dateTo: d.publicationYearEnd || '',
         notes: notes
       });
       // Highlight notes cell if warning
@@ -1271,7 +1293,7 @@ function handleMergeFile1(file) {
       </label>`).join('');
 
     // Auto-check columns that look like platform names
-    const platformKeywords = ['interench','liveauction','live auction','ebay','invaluable','barneby','abebook','biblio','rarebookhub','lot-tissimo','catawiki','leboncoin','lot tissimo'];
+    const platformKeywords = ['interench','liveauction','live auction','ebay','invaluable','barneby','abebook','biblio','rarebookhub','lot-tissimo','catawiki','leboncoin','lot tissimo','vialibri','viLibri'];
     wrap.querySelectorAll('input[type=checkbox]').forEach(cb => {
       const h = mergeOriginalHeaders[parseInt(cb.value)] || '';
       if (platformKeywords.some(k => h.toLowerCase().includes(k))) cb.checked = true;
