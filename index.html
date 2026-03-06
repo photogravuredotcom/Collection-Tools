@@ -273,6 +273,7 @@
     <div class="mode-tab active" id="tabSingle" onclick="switchMode('single')">Single Title</div>
     <div class="mode-tab" id="tabBatch" onclick="switchMode('batch')">Batch — CSV Upload</div>
     <div class="mode-tab" id="tabMerge" onclick="switchMode('merge')">Merge Spreadsheets</div>
+    <div class="mode-tab" id="tabRbh" onclick="switchMode('rbh')">RBH Column</div>
   </div>
 
   <div class="input-panel">
@@ -374,6 +375,52 @@ or    Découvertes en Chaldée 1884"></textarea>
       <div class="error-msg" id="mergeErrorMsg"></div>
     </div>
 
+    <!-- RBH MODE -->
+    <div class="mode-pane" id="paneRbh">
+      <label class="panel-label">Upload Master XLSX</label>
+      <p class="hint" style="margin-bottom:10px;">Upload your master spreadsheet (exported from this tool or the merged version). The tool will read the <strong>Original Citation</strong> column, generate an optimised Rare Book Hub search term for each row, and insert it as a new column right after <em>viaLibri / AbeBooks / Biblio</em>.</p>
+      <div class="batch-drop" id="rbhDrop" onclick="document.getElementById('rbhFileInput').click()"
+        ondragover="event.preventDefault();this.classList.add('dragover')"
+        ondragleave="this.classList.remove('dragover')"
+        ondrop="event.preventDefault();this.classList.remove('dragover');if(event.dataTransfer.files[0])handleRbhFile(event.dataTransfer.files[0])">
+        <strong>Click to choose or drag &amp; drop</strong>
+        <p>Master spreadsheet — XLSX</p>
+      </div>
+      <input type="file" id="rbhFileInput" accept=".xlsx" style="display:none;" onchange="handleRbhFile(this.files[0])">
+      <div class="batch-file-info" id="rbhFileInfo"></div>
+
+      <div class="hint" style="margin-top:10px;padding:8px 12px;background:var(--amber-bg);border-left:3px solid var(--gold);">
+        <strong>Note on diacritics:</strong> RBH search likely does not normalise diacritics. Search terms will have diacritics stripped to plain ASCII for maximum recall.
+      </div>
+
+      <button class="generate" id="rbhRunBtn" onclick="runRbh()" disabled style="margin-top:12px;">Generate RBH Terms</button>
+      <button class="generate" id="rbhResumeBtn" onclick="resumeRbhErrors()" style="display:none;margin-top:6px;background:var(--rust);">&#8635; Retry Failed Rows</button>
+      <div class="error-msg" id="rbhErrorMsg"></div>
+
+      <div class="batch-progress-wrap" id="rbhProgressWrap">
+        <div class="batch-progress-label" id="rbhProgressLabel"></div>
+        <div class="batch-progress-bar-bg"><div class="batch-progress-bar" id="rbhProgressBar"></div></div>
+        <div class="batch-progress-current" id="rbhProgressCurrent"></div>
+      </div>
+
+      <div class="batch-results-wrap" id="rbhResultsWrap" style="display:none;margin-top:16px;">
+        <div style="font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--gold);margin-bottom:8px;" id="rbhResultsLabel"></div>
+        <div style="overflow-x:auto;margin-bottom:12px;">
+          <table id="rbhTable">
+            <thead>
+              <tr>
+                <th style="font-weight:700;">Original Citation</th>
+                <th style="font-weight:700;">RBH Search Term</th>
+                <th style="font-weight:700;">Notes / Warnings</th>
+              </tr>
+            </thead>
+            <tbody id="rbhTableBody"></tbody>
+          </table>
+        </div>
+        <button class="batch-download-btn" onclick="downloadRbhXLSX()">&#8595; Download Updated XLSX</button>
+      </div>
+    </div>
+
     <!-- API key (shared) -->
     <div style="margin-top:16px;">
       <button type="button" onclick="toggleApiKey()" style="background:none;border:none;cursor:pointer;font-family:'DM Mono',monospace;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-mid);padding:0;">&#9660; API Key</button>
@@ -469,6 +516,12 @@ or    Découvertes en Chaldée 1884"></textarea>
       <p id="diacriticText"></p>
     </div>
 
+    <!-- Stripping warning banner -->
+    <div class="warning-banner" id="strippingWarningBanner" style="display:none;">
+      <strong>&#9888; Stripping Changes Meaning</strong>
+      <p id="strippingWarningText"></p>
+    </div>
+
     <!-- Exclusion terms -->
     <div class="block block-exclude" id="excludeBlock" style="display:none;">
       <div class="block-head">
@@ -530,6 +583,7 @@ Return ONLY valid JSON. No markdown fences, no preamble, no text after. All stri
   "publicationYearEnd": "Four-digit end year for journals or multi-volume works that span a range of years (e.g. a journal volume published 1851-1860, or a multi-volume set issued over several years). Empty string for single-year publications or if uncertain.",
   "authorSurname": "Single primary author surname only, no particles (de, von, van, du, le, la), no initials, no punctuation. Empty string if multiple authors, editors, corporate/institutional, unclear, or if stripping the surname diacritics creates a common word or causes ambiguity.",
   "diacriticStrategy": "Explain the diacritic decision made for this input. If accented characters are present: (1) confirm the accented form used in searchTermAccented; (2) describe any word collision risk in the stripped searchTerm; (3) note whether the author surname was affected. If no diacritics were present, return an empty string.",
+  "strippingWarning": "Non-empty ONLY if stripping diacritics from any word in searchTerm produces a word with a genuinely different meaning in any language (e.g. uber vs über, Koln vs Köln, epoque vs époque, Muller vs Müller). Format: 'Stripped [word] → [stripped form]: [brief meaning difference]'. Empty string if no meaningful collision.",
   "exclusionTerms": [
     { "term": "word without brackets", "reason": "why exclude" }
   ],
@@ -736,6 +790,14 @@ function renderResults(d) {
     diacriticText.textContent = d.diacriticStrategy;
     diacriticBanner.classList.add('visible');
   } else { diacriticBanner.classList.remove('visible'); }
+
+  // Stripping warning banner
+  const strippingBanner = document.getElementById('strippingWarningBanner');
+  const strippingText = document.getElementById('strippingWarningText');
+  if (d.strippingWarning && d.strippingWarning.trim()) {
+    strippingText.textContent = d.strippingWarning;
+    strippingBanner.style.display = 'block';
+  } else { strippingBanner.style.display = 'none'; }
 
   // Exclusions
   const excludeBlock = document.getElementById('excludeBlock');
@@ -963,7 +1025,7 @@ let batchRows = [];
 let batchResults = [];
 
 function switchMode(mode) {
-  ['single','batch','merge'].forEach(m => {
+  ['single','batch','merge','rbh'].forEach(m => {
     document.getElementById('tab' + m.charAt(0).toUpperCase() + m.slice(1)).classList.toggle('active', m === mode);
     document.getElementById('pane' + m.charAt(0).toUpperCase() + m.slice(1)).classList.toggle('active', m === mode);
   });
@@ -1150,13 +1212,15 @@ function renderBatchResults() {
       const stripped = d.searchTerm || '';
       const otherPlatforms = stripped !== accented ? stripped : '';
       const notes = d.highFalsePositiveRisk ? (d.warningText || 'High false-positive risk') : '';
+      const stripping = d.strippingWarning && d.strippingWarning.trim() ? '⚠ ' + d.strippingWarning : '';
+      const notesCell = [notes, stripping].filter(Boolean).join(' · ');
       tr.innerHTML = `<td>${esc(row.citation)}</td>
         <td>${esc(accented)}</td>
         <td>${esc(otherPlatforms)}</td>
         <td>${esc(d.authorSurname || '')}</td>
         <td>${esc(d.publicationYear || '')}</td>
         <td>${esc(d.publicationYearEnd || '')}</td>
-        <td style="${notes ? 'color:var(--rust);font-style:italic;' : ''}">${esc(notes)}</td>`;
+        <td style="${notesCell ? 'color:var(--rust);font-style:italic;' : ''}">${esc(notesCell)}</td>`;
     }
     tbody.appendChild(tr);
   }
@@ -1199,6 +1263,8 @@ async function downloadXLSX() {
       const accented = d.searchTermAccented || d.searchTerm || '';
       const stripped = d.searchTerm || '';
       const notes = d.highFalsePositiveRisk ? (d.warningText || 'High false-positive risk') : '';
+      const stripping = d.strippingWarning && d.strippingWarning.trim() ? '⚠ ' + d.strippingWarning : '';
+      const notesCell = [notes, stripping].filter(Boolean).join(' · ');
       const dataRow = ws.addRow({
         citation: row.citation,
         accented: accented,
@@ -1206,10 +1272,9 @@ async function downloadXLSX() {
         author: d.authorSurname || '',
         dateFrom: d.publicationYear || '',
         dateTo: d.publicationYearEnd || '',
-        notes: notes
+        notes: notesCell
       });
-      // Highlight notes cell if warning
-      if (notes) {
+      if (notesCell) {
         dataRow.getCell('notes').font = { color: { argb: 'FF8B3A1A' }, italic: true };
       }
     }
@@ -1462,6 +1527,321 @@ async function downloadMergedXLSX() {
 function showMergeError(msg) { const el = document.getElementById('mergeErrorMsg'); el.textContent = msg; el.classList.add('visible'); }
 function hideMergeError() { document.getElementById('mergeErrorMsg').classList.remove('visible'); }
 // ── END MERGE MODE ────────────────────────────────────────────
+
+// ── RBH MODE ──────────────────────────────────────────────────
+let rbhWorkbook = null;      // original ExcelJS workbook
+let rbhCitations = [];       // array of {rowIndex, citation}
+let rbhResults = [];         // array of {rowIndex, citation, rbhTerm, error}
+
+function handleRbhFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(e.target.result);
+      rbhWorkbook = wb;
+
+      const ws = wb.worksheets[0];
+      if (!ws) { showRbhError('Could not read the first sheet.'); return; }
+
+      // Find "Original Citation" column
+      const headerRow = ws.getRow(1);
+      let citationColIndex = -1;
+      headerRow.eachCell((cell, colNumber) => {
+        const val = (cell.value || '').toString().trim();
+        if (val === 'Original Citation') citationColIndex = colNumber;
+      });
+
+      if (citationColIndex === -1) {
+        showRbhError('Could not find an "Original Citation" column in the first sheet. Please check your file.');
+        return;
+      }
+
+      // Read all citation rows
+      rbhCitations = [];
+      ws.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return; // skip header
+        const cell = row.getCell(citationColIndex);
+        let val = '';
+        if (cell.value && typeof cell.value === 'object' && cell.value.richText) {
+          val = cell.value.richText.map(r => r.text).join('');
+        } else if (cell.value !== null && cell.value !== undefined) {
+          val = cell.value.toString();
+        }
+        val = val.trim();
+        if (val && !val.startsWith('ERROR:')) {
+          rbhCitations.push({ rowIndex: rowNumber, citation: val });
+        }
+      });
+
+      if (!rbhCitations.length) { showRbhError('No citation rows found in the file.'); return; }
+
+      const info = document.getElementById('rbhFileInfo');
+      info.textContent = file.name + ' — ' + rbhCitations.length + ' citation' + (rbhCitations.length !== 1 ? 's' : '') + ' ready';
+      document.getElementById('rbhRunBtn').disabled = false;
+      rbhResults = [];
+      document.getElementById('rbhResultsWrap').style.display = 'none';
+      hideRbhError();
+    } catch(err) {
+      showRbhError('Could not read the file: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function buildRbhPrompt(citation) {
+  return `You are an expert rare book search strategist. Generate the optimal search term for Rare Book Hub (RBH), an auction record database.
+
+RBH is an English-language database of auction records. It does NOT normalise diacritics — strip all diacritics to plain ASCII. It searches across title, author, and description fields in auction catalogue records, which may use abbreviated or variant titles.
+
+INPUT: ${citation}
+
+Return ONLY valid JSON, no preamble, no markdown.
+
+{
+  "rbhTerm": "The optimal 1-3 word ASCII search string for Rare Book Hub. Choose the most distinctive words that will appear in auction catalogue records. Prefer: distinctive title words over common ones, author surname if distinctive, avoid generic words (catalogue, collection, plates, illustrated). Strip ALL diacritics to plain ASCII. No year unless essential for disambiguation (e.g. journal volumes). No quotes unless essential.",
+  "rbhNote": "One sentence explaining the term choice — what makes it distinctive and why it will retrieve this title.",
+  "strippingWarning": "Non-empty ONLY if stripping diacritics from any word in rbhTerm produces a word with a genuinely different meaning in any language. Format: 'Stripped [word] → [stripped form]: [brief meaning difference]'. Empty string if no meaningful collision."
+}`;
+}
+
+async function runRbh() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { showRbhError('Please enter your Anthropic API key first.'); return; }
+  if (!rbhCitations.length) { showRbhError('Please upload a master XLSX file first.'); return; }
+
+  document.getElementById('rbhRunBtn').disabled = true;
+  document.getElementById('rbhResumeBtn').style.display = 'none';
+  hideRbhError();
+
+  const progressWrap = document.getElementById('rbhProgressWrap');
+  const progressBar = document.getElementById('rbhProgressBar');
+  const progressLabel = document.getElementById('rbhProgressLabel');
+  const progressCurrent = document.getElementById('rbhProgressCurrent');
+  progressWrap.style.display = 'block';
+  progressBar.style.width = '0%';
+
+  rbhResults = rbhCitations.map(r => ({ ...r, rbhTerm: null, rbhNote: null, error: null }));
+  const total = rbhCitations.length;
+
+  for (let i = 0; i < total; i++) {
+    const { rowIndex, citation } = rbhCitations[i];
+    progressLabel.textContent = 'Processing ' + (i + 1) + ' of ' + total + '…';
+    progressBar.style.width = Math.round((i / total) * 100) + '%';
+    progressCurrent.textContent = citation.length > 80 ? citation.slice(0, 80) + '…' : citation;
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 300,
+          messages: [{ role: "user", content: buildRbhPrompt(citation) }]
+        })
+      });
+      const data = await response.json();
+      if (data.error) throw new Error(data.error.message || 'API error');
+      const raw = data.content.map(i => i.text || '').join('');
+      const parsed = extractJSON(raw);
+      if (!parsed || !parsed.rbhTerm) throw new Error('Could not parse response');
+      rbhResults[i] = { rowIndex, citation, rbhTerm: parsed.rbhTerm, rbhNote: parsed.rbhNote || '', strippingWarning: parsed.strippingWarning || '', error: null };
+    } catch(err) {
+      rbhResults[i] = { rowIndex, citation, rbhTerm: null, rbhNote: null, error: err.message };
+    }
+
+    if (i < total - 1) await new Promise(r => setTimeout(r, 300));
+  }
+
+  progressBar.style.width = '100%';
+  const errors = rbhResults.filter(r => r.error).length;
+  progressLabel.textContent = 'Complete — ' + total + ' rows processed' + (errors ? ' · ' + errors + ' failed' : '');
+  progressCurrent.textContent = '';
+
+  renderRbhResults();
+  document.getElementById('rbhRunBtn').disabled = false;
+  document.getElementById('rbhResumeBtn').style.display = errors ? 'block' : 'none';
+}
+
+async function resumeRbhErrors() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { showRbhError('Please enter your Anthropic API key first.'); return; }
+
+  const failedIndices = rbhResults.map((r, i) => r.error ? i : -1).filter(i => i >= 0);
+  if (!failedIndices.length) return;
+
+  document.getElementById('rbhResumeBtn').disabled = true;
+  document.getElementById('rbhRunBtn').disabled = true;
+
+  const progressWrap = document.getElementById('rbhProgressWrap');
+  const progressBar = document.getElementById('rbhProgressBar');
+  const progressLabel = document.getElementById('rbhProgressLabel');
+  const progressCurrent = document.getElementById('rbhProgressCurrent');
+  progressWrap.style.display = 'block';
+  progressBar.style.width = '0%';
+
+  for (let n = 0; n < failedIndices.length; n++) {
+    const idx = failedIndices[n];
+    const { rowIndex, citation } = rbhResults[idx];
+    progressLabel.textContent = 'Retrying ' + (n + 1) + ' of ' + failedIndices.length + ' failed rows…';
+    progressBar.style.width = Math.round((n / failedIndices.length) * 100) + '%';
+    progressCurrent.textContent = citation.length > 80 ? citation.slice(0, 80) + '…' : citation;
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 300,
+          messages: [{ role: "user", content: buildRbhPrompt(citation) }]
+        })
+      });
+      const data = await response.json();
+      if (data.error) throw new Error(data.error.message || 'API error');
+      const raw = data.content.map(i => i.text || '').join('');
+      const parsed = extractJSON(raw);
+      if (!parsed || !parsed.rbhTerm) throw new Error('Could not parse response');
+      rbhResults[idx] = { rowIndex, citation, rbhTerm: parsed.rbhTerm, rbhNote: parsed.rbhNote || '', strippingWarning: parsed.strippingWarning || '', error: null };
+    } catch(err) {
+      rbhResults[idx] = { ...rbhResults[idx], error: err.message };
+    }
+
+    if (n < failedIndices.length - 1) await new Promise(r => setTimeout(r, 300));
+  }
+
+  progressBar.style.width = '100%';
+  const stillFailed = rbhResults.filter(r => r.error).length;
+  progressLabel.textContent = 'Retry complete' + (stillFailed ? ' · ' + stillFailed + ' still failed' : ' · all rows succeeded');
+  progressCurrent.textContent = '';
+
+  renderRbhResults();
+  document.getElementById('rbhRunBtn').disabled = false;
+  document.getElementById('rbhResumeBtn').disabled = false;
+  document.getElementById('rbhResumeBtn').style.display = stillFailed ? 'block' : 'none';
+}
+
+function renderRbhResults() {
+  const tbody = document.getElementById('rbhTableBody');
+  tbody.innerHTML = '';
+  const wrap = document.getElementById('rbhResultsWrap');
+  const label = document.getElementById('rbhResultsLabel');
+  const errors = rbhResults.filter(r => r.error).length;
+  label.textContent = rbhResults.length + ' rows processed' + (errors ? ' — ' + errors + ' failed' : ' — all succeeded');
+
+  for (const row of rbhResults) {
+    const tr = document.createElement('tr');
+    if (row.error) {
+      tr.className = 'batch-error-row';
+      tr.innerHTML = `<td>${esc(row.citation)}</td><td colspan="2">Error: ${esc(row.error)}</td>`;
+    } else {
+      const warn = row.strippingWarning && row.strippingWarning.trim() ? '⚠ ' + row.strippingWarning : '';
+      tr.innerHTML = `<td>${esc(row.citation)}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:0.85rem;">${esc(row.rbhTerm)}</td>
+        <td style="font-size:0.85rem;">${row.rbhNote ? '<span style="font-style:italic;color:var(--warm-mid);">' + esc(row.rbhNote) + '</span>' : ''}${warn ? (row.rbhNote ? '<br>' : '') + '<span style="color:var(--rust);font-weight:600;">' + esc(warn) + '</span>' : ''}</td>`;
+    }
+    tbody.appendChild(tr);
+  }
+  wrap.style.display = 'block';
+  wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function downloadRbhXLSX() {
+  if (!rbhWorkbook || !rbhResults.length) return;
+
+  const ws = rbhWorkbook.worksheets[0];
+
+  // Find where to insert the new column — right after "viaLibri / AbeBooks / Biblio"
+  const headerRow = ws.getRow(1);
+  let insertAfterCol = -1;
+  let lastCol = 0;
+  headerRow.eachCell((cell, colNumber) => {
+    const val = (cell.value || '').toString().trim();
+    if (val === 'viaLibri / AbeBooks / Biblio') insertAfterCol = colNumber;
+    if (colNumber > lastCol) lastCol = colNumber;
+  });
+
+  // If we can't find the column, append at end
+  const rbhColIndex = insertAfterCol > 0 ? insertAfterCol + 1 : lastCol + 1;
+
+  // We need to shift all columns from rbhColIndex rightward to make room
+  // ExcelJS doesn't support column insertion directly, so we rebuild via splice approach:
+  // Read all data, insert column, re-write
+
+  const allData = [];
+  ws.eachRow((row, rowNumber) => {
+    const rowData = [];
+    for (let c = 1; c <= lastCol + 1; c++) {
+      rowData.push({ value: row.getCell(c).value, font: row.getCell(c).font, fill: row.getCell(c).fill, alignment: row.getCell(c).alignment });
+    }
+    allData.push({ rowNumber, rowData, height: row.height });
+  });
+
+  // Build result lookup by rowIndex
+  const rbhLookup = {};
+  rbhResults.forEach(r => { rbhLookup[r.rowIndex] = r; });
+
+  // Re-write worksheet with inserted columns (RBH Term + Warning)
+  ws.spliceColumns(rbhColIndex, 0, [], []);  // insert two empty columns
+
+  // Set headers
+  const rbhHeader = ws.getRow(1).getCell(rbhColIndex);
+  rbhHeader.value = 'RBH Search Term';
+  rbhHeader.font = { name: 'Helvetica Neue', size: 14, bold: true, color: { argb: 'FFF5F0E8' } };
+  rbhHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A1410' } };
+  rbhHeader.alignment = { vertical: 'middle' };
+
+  const warnHeader = ws.getRow(1).getCell(rbhColIndex + 1);
+  warnHeader.value = 'RBH Strip Warning';
+  warnHeader.font = { name: 'Helvetica Neue', size: 14, bold: true, color: { argb: 'FFF5F0E8' } };
+  warnHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A1410' } };
+  warnHeader.alignment = { vertical: 'middle' };
+
+  // Fill data rows
+  ws.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const rbh = rbhLookup[rowNumber];
+    if (rbh && !rbh.error && rbh.rbhTerm) {
+      row.getCell(rbhColIndex).value = rbh.rbhTerm;
+      if (rbh.strippingWarning && rbh.strippingWarning.trim()) {
+        const warnCell = row.getCell(rbhColIndex + 1);
+        warnCell.value = '⚠ ' + rbh.strippingWarning;
+        warnCell.font = { color: { argb: 'FF8B3A1A' }, italic: true };
+      }
+    }
+  });
+
+  // Set column widths
+  ws.getColumn(rbhColIndex).width = 24;
+  ws.getColumn(rbhColIndex + 1).width = 38;
+
+  // Re-apply frozen row
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+  const buffer = await rbhWorkbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'master-with-rbh-' + new Date().toISOString().slice(0, 10) + '.xlsx';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function showRbhError(msg) { const el = document.getElementById('rbhErrorMsg'); el.textContent = msg; el.classList.add('visible'); }
+function hideRbhError() { document.getElementById('rbhErrorMsg').classList.remove('visible'); }
+// ── END RBH MODE ──────────────────────────────────────────────
 function hideError() { document.getElementById('errorMsg').classList.remove('visible'); }
 function esc(str) { return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
